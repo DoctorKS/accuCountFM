@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ChevronRight, Download, Loader2 } from "lucide-react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
-import { DOCTORS, DOCTOR_COLOR_HEX, type Doctor } from "@/lib/doctors";
+import { DOCTORS, DOCTOR_COLOR_HEX, isDoctor, type Doctor } from "@/lib/doctors";
 import {
   AUTOPSY_CUT_RATE, AUTOPSY_NON_CUT_RATE,
   type ShiftType,
@@ -14,6 +14,7 @@ import { useMonth, useAutopsyCounts, useUpsertAutopsyCount } from "@/hooks/useSh
 import { computeMonthByDoctor, type DoctorMonthSummary } from "@/lib/calc-month";
 import { exportMonthXlsx, type ShiftBundle } from "@/lib/tauri";
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker";
+import { CasesDialog } from "@/components/cases/CasesDialog";
 import type { AssignmentRow, CaseRow } from "@/lib/db";
 
 type Mode = "all" | "outHos" | "inHos";
@@ -147,7 +148,13 @@ export function TotalSummary({ mode }: { mode: Mode }) {
 
       {mode === "all"
         ? <AllTable rows={rows} yearMonth={ym} />
-        : <SimpleTable rows={rows} mode={mode} yearMonth={ym} />}
+        : <SimpleTable
+            rows={rows}
+            mode={mode}
+            yearMonth={ym}
+            assignments={(mode === "outHos" ? outMonth.data?.assignments : inMonth.data?.assignments) ?? []}
+            cases={(mode === "outHos" ? outMonth.data?.cases : inMonth.data?.cases) ?? []}
+          />}
     </div>
   );
 }
@@ -265,59 +272,115 @@ function AutopsyInput({
 
 /* ───── Simpler table for /summary/out and /summary/in ─────────────────── */
 
-function SimpleTable({ rows, mode, yearMonth }: {
+function SimpleTable({ rows, mode, yearMonth, assignments, cases }: {
   rows: Array<{ doctor: Doctor; outTotal: number; inTotal: number }>;
   mode: "outHos" | "inHos";
   yearMonth: string;
+  assignments: AssignmentRow[];
+  cases: CaseRow[];
 }) {
   const isOut = mode === "outHos";
+  const shiftType: ShiftType = isOut ? "outHos" : "inHos";
   const colLabel = isOut ? "ค่าเวรชันสูตรนอก" : "ค่าเวรชันสูตรใน";
   const tone = isOut ? "text-violet-700" : "text-emerald-700";
   const route = isOut ? "out" : "in";
+  const [csDialogDoctor, setCsDialogDoctor] = useState<Doctor | null>(null);
+
+  // Group cases by the doctor assigned to each (date, slot). Cases without
+  // an assigned doctor are dropped from per-doctor totals (they'd pay nobody).
+  const casesByDoctor = useMemo(() => {
+    const slotToDoctor = new Map<string, Doctor>();
+    for (const a of assignments) {
+      if (a.doctor_name && isDoctor(a.doctor_name)) {
+        slotToDoctor.set(`${a.date}|${a.slot}`, a.doctor_name);
+      }
+    }
+    const m = new Map<Doctor, CaseRow[]>();
+    for (const c of cases) {
+      const d = slotToDoctor.get(`${c.date}|${c.slot}`);
+      if (!d) continue;
+      const arr = m.get(d) ?? [];
+      arr.push(c);
+      m.set(d, arr);
+    }
+    return m;
+  }, [assignments, cases]);
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-      <table className="w-full text-sm">
-        <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
-          <tr>
-            <th className="px-4 py-3 text-left">แพทย์</th>
-            <th className="px-4 py-3 text-right">{colLabel}</th>
-            <th className="px-4 py-3 text-right">แจกแจง</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100">
-          {rows.map((r) => {
-            const v = isOut ? r.outTotal : r.inTotal;
-            return (
-              <tr key={r.doctor} className="hover:bg-zinc-50">
-                <td className="px-4 py-3">
-                  <span className="inline-flex items-center gap-1.5 font-semibold">
-                    <span className="h-2 w-2 rounded-full" style={{ background: DOCTOR_COLOR_HEX[r.doctor] }} />
-                    {r.doctor}
-                  </span>
-                </td>
-                <td className={`px-4 py-3 text-right font-semibold tabular-nums ${tone}`}>{fmtBaht(v)}</td>
-                <td className="px-4 py-3 text-right">
-                  <Link
-                    to={`/breakdown/${route}/${encodeURIComponent(r.doctor)}/${yearMonth}`}
-                    className={`inline-flex items-center gap-1 text-xs hover:underline ${tone}`}
-                  >
-                    ดู row-by-row <ChevronRight className="h-3 w-3" />
-                  </Link>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-        <tfoot className="bg-zinc-50 text-sm font-semibold">
-          <tr>
-            <td className="px-4 py-3 text-right text-zinc-600">รวมทั้งหมด</td>
-            <td className={`px-4 py-3 text-right tabular-nums ${tone}`}>
-              {fmtBaht(rows.reduce((a, r) => a + (isOut ? r.outTotal : r.inTotal), 0))}
-            </td>
-            <td />
-          </tr>
-        </tfoot>
-      </table>
-    </div>
+    <>
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+        <table className="w-full text-sm">
+          <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
+            <tr>
+              <th className="px-4 py-3 text-left">แพทย์</th>
+              <th className="px-4 py-3 text-center">CS</th>
+              <th className="px-4 py-3 text-right">{colLabel}</th>
+              <th className="px-4 py-3 text-right">แจกแจง</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100">
+            {rows.map((r) => {
+              const v = isOut ? r.outTotal : r.inTotal;
+              const csCount = casesByDoctor.get(r.doctor)?.length ?? 0;
+              return (
+                <tr key={r.doctor} className="hover:bg-zinc-50">
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center gap-1.5 font-semibold">
+                      <span className="h-2 w-2 rounded-full" style={{ background: DOCTOR_COLOR_HEX[r.doctor] }} />
+                      {r.doctor}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {csCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setCsDialogDoctor(r.doctor)}
+                        className={`rounded-md px-2.5 py-1 text-sm font-semibold tabular-nums ring-1 ring-zinc-200 hover:bg-zinc-100 ${tone}`}
+                        title="คลิกเพื่อดูรายการ CS"
+                      >
+                        {csCount}
+                      </button>
+                    ) : (
+                      <span className="text-zinc-300 tabular-nums">0</span>
+                    )}
+                  </td>
+                  <td className={`px-4 py-3 text-right font-semibold tabular-nums ${tone}`}>{fmtBaht(v)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <Link
+                      to={`/breakdown/${route}/${encodeURIComponent(r.doctor)}/${yearMonth}`}
+                      className={`inline-flex items-center gap-1 text-xs hover:underline ${tone}`}
+                    >
+                      ดู row-by-row <ChevronRight className="h-3 w-3" />
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className="bg-zinc-50 text-sm font-semibold">
+            <tr>
+              <td className="px-4 py-3 text-right text-zinc-600">รวมทั้งหมด</td>
+              <td className="px-4 py-3 text-center tabular-nums">
+                {Array.from(casesByDoctor.values()).reduce((a, arr) => a + arr.length, 0)}
+              </td>
+              <td className={`px-4 py-3 text-right tabular-nums ${tone}`}>
+                {fmtBaht(rows.reduce((a, r) => a + (isOut ? r.outTotal : r.inTotal), 0))}
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {csDialogDoctor && (
+        <CasesDialog
+          doctor={csDialogDoctor}
+          shiftType={shiftType}
+          yearMonth={yearMonth}
+          cases={casesByDoctor.get(csDialogDoctor) ?? []}
+          onClose={() => setCsDialogDoctor(null)}
+        />
+      )}
+    </>
   );
 }
