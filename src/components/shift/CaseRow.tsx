@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import type { CaseRow as CaseRowT } from "@/lib/db";
 import type { ShiftType } from "@/lib/constants";
 import { useUpdateCase, useDeleteCase } from "@/hooks/useShift";
 import { TimePicker24 } from "@/components/ui/TimePicker24";
+import { isLiveCaseComplete } from "@/lib/case-validation";
 
 /**
  * A single case row in a shift slot.
@@ -68,13 +70,19 @@ export function CaseRow({
           ref={inputRef}
           type="text"
           inputMode="numeric"
-          placeholder="หมายเลขเคส"
+          placeholder="หมายเลข CS"
           value={prefix}
           onChange={(e) => setPrefix(e.target.value)}
           onBlur={flush}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
+              // Enter advances to a new case row only when the CURRENT row is
+              // complete (CS + leave + return for outHos; CS only for inHos).
+              if (!isLiveCaseComplete(prefix, row.leave_time, row.return_time, shiftType)) {
+                toast.error("กรุณากรอกข้อมูลให้ครบ");
+                return;
+              }
               flush();
               onAddNext?.();
             }

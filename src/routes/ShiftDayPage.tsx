@@ -1,6 +1,7 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import { SLOTS, SHIFT_TYPE_LABEL, type ShiftType, type Slot, CASE_BONUS_OUT_HOS, CASE_BONUS_IN_HOS } from "@/lib/constants";
 import { formatBEFullDate } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
@@ -9,6 +10,7 @@ import { computeDay } from "@/lib/calc-month";
 import { ShiftSlotCard } from "@/components/shift/ShiftSlotCard";
 import { SlotBreakdownCard } from "@/components/shift/SlotBreakdownCard";
 import { DOCTORS, DOCTOR_COLOR_HEX, isDoctor, type Doctor } from "@/lib/doctors";
+import { findIncompleteCases } from "@/lib/case-validation";
 
 /**
  * One day's shift schedule for a given shift_type.
@@ -20,10 +22,9 @@ import { DOCTORS, DOCTOR_COLOR_HEX, isDoctor, type Doctor } from "@/lib/doctors"
  */
 export function ShiftDayPage() {
   const { type, date } = useParams<{ type: "out" | "in"; date: string }>();
+  const navigate = useNavigate();
   const shiftType: ShiftType = type === "in" ? "inHos" : "outHos";
   const ym = date ? date.slice(0, 7) : "";
-  // Preserve the user's selected month on the way back to /out or /in.
-  // (Dashboard → /out or /in stays parameter-less, so opens on the current month.)
   const backTo = `${type === "in" ? "/in" : "/out"}${ym ? `?ym=${ym}` : ""}`;
   const caseRate = shiftType === "outHos" ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS;
 
@@ -32,6 +33,40 @@ export function ShiftDayPage() {
     if (!month.data || !date) return null;
     return computeDay(shiftType, date, month.data.assignments, month.data.cases, month.data.holidays);
   }, [month.data, shiftType, date]);
+
+  /**
+   * Guard the "back" action: any incomplete case (missing CS / leave / return)
+   * blocks navigation. We blur the active input first so the most recent
+   * keystroke gets flushed before the DB read.
+   */
+  const guardBack = useCallback((): boolean => {
+    if (document.activeElement && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    if (!month.data || !date) return true;
+    const todays = month.data.cases.filter((c) => c.date === date);
+    const incomplete = findIncompleteCases(todays, shiftType);
+    if (incomplete.length > 0) {
+      toast.error("กรุณากรอกข้อมูลให้ครบ");
+      return false;
+    }
+    return true;
+  }, [month.data, date, shiftType]);
+
+  /** PageDown → "back one level" (same guard). */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "PageDown") return;
+      // Skip when typing into a contenteditable / form field that would
+      // legitimately consume PageDown (e.g. selects, textareas).
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === "textarea") return;
+      e.preventDefault();
+      if (guardBack()) navigate(backTo);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [guardBack, navigate, backTo]);
 
   // Per-doctor totals — sum across the 3 slots if same doctor.
   const perDoctor = useMemo(() => {
@@ -52,14 +87,20 @@ export function ShiftDayPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <div className="flex items-center justify-between">
-        <Link to={backTo} className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-900">
-          <ArrowLeft className="h-4 w-4" /> กลับเดือน
+        <Link
+          to={backTo}
+          onClick={(e) => { if (!guardBack()) e.preventDefault(); }}
+          className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-900"
+        >
+          <ArrowLeft className="h-4 w-4" /> กลับไปหน้าก่อน
         </Link>
         <div className="text-center">
           <div className="text-xs text-zinc-500">{SHIFT_TYPE_LABEL[shiftType]}</div>
           <h1 className="text-xl font-bold">{date ? formatBEFullDate(date) : "—"}</h1>
         </div>
-        <div className="w-24" />
+        <div className="w-24 text-right text-[10px] text-zinc-400">
+          กด PageDown เพื่อกลับ
+        </div>
       </div>
 
       {month.isLoading && <p className="text-sm text-zinc-500">กำลังโหลด…</p>}
