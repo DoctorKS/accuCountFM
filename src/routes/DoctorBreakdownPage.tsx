@@ -12,7 +12,8 @@ import { isDoctor } from "@/lib/doctors";
 export function DoctorBreakdownPage() {
   const { type, doctor, ym } = useParams<{ type: "out" | "in"; doctor: string; ym: string }>();
   const shiftType: ShiftType = type === "in" ? "inHos" : "outHos";
-  const backTo = type === "in" ? "/in" : "/out";
+  // Carry ym back to the month page so the picker stays on the right month.
+  const backTo = `${type === "in" ? "/in" : "/out"}${ym ? `?ym=${ym}` : ""}`;
   const doctorName = doctor ? decodeURIComponent(doctor) : "";
   const valid = isDoctor(doctorName);
   const caseRate = shiftType === "outHos" ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS;

@@ -21,8 +21,10 @@ import { DOCTORS, DOCTOR_COLOR_HEX, isDoctor, type Doctor } from "@/lib/doctors"
 export function ShiftDayPage() {
   const { type, date } = useParams<{ type: "out" | "in"; date: string }>();
   const shiftType: ShiftType = type === "in" ? "inHos" : "outHos";
-  const backTo = type === "in" ? "/in" : "/out";
   const ym = date ? date.slice(0, 7) : "";
+  // Preserve the user's selected month on the way back to /out or /in.
+  // (Dashboard → /out or /in stays parameter-less, so opens on the current month.)
+  const backTo = `${type === "in" ? "/in" : "/out"}${ym ? `?ym=${ym}` : ""}`;
   const caseRate = shiftType === "outHos" ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS;
 
   const month = useMonth(shiftType, ym);

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Upload, ChevronRight, ClipboardList } from "lucide-react";
 import { type ShiftType, SHIFT_TYPE_LABEL } from "@/lib/constants";
 import { DOCTORS, DOCTOR_BG_CLASS } from "@/lib/doctors";
@@ -12,9 +12,22 @@ import { VerifyDialog } from "@/components/verify/VerifyDialog";
 import { HolidayChips } from "@/components/shift/HolidayChips";
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker";
 
-/** /out and /in — month picker, calendar grid (left), 4 doctor cards (right). */
+/**
+ * /out and /in — month picker, calendar grid (left), 4 doctor cards (right).
+ *
+ * The active month lives in the URL as `?ym=YYYY-MM`. When the user enters
+ * from the Dashboard (no query) we default to the current month; when they
+ * navigate back from ShiftDayPage we preserve the month they were on.
+ */
 export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
-  const [ym, setYm] = useState(currentYearMonth());
+  const [params, setParams] = useSearchParams();
+  const qsYm = params.get("ym");
+  const ym = qsYm && /^\d{4}-\d{2}$/.test(qsYm) ? qsYm : currentYearMonth();
+  const setYm = (next: string) => {
+    // `replace` so back/forward doesn't pile up history entries for each pick.
+    setParams({ ym: next }, { replace: true });
+  };
+
   const [ocrOpen, setOcrOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const title = SHIFT_TYPE_LABEL[shiftType];
