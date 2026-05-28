@@ -32,7 +32,7 @@ Native Windows app, ไม่มี auth, เก็บ local-first บนเค�
 | Routing | React Router 6 — HashRouter (Tauri-safe) |
 | UI | Tailwind + shadcn/ui (zinc base, indigo accent) — มาจาก convention เดียวกับ Aesthetic-stock |
 | State | Zustand (UI state) + TanStack Query (server state via Tauri IPC) |
-| Fonts | IBM Plex Sans Thai (bundled local woff2 — ไม่พึ่ง Google Fonts) |
+| Fonts | **TH Sarabun New** (SIPA public domain, .woff bundled in `src/assets/fonts/`, no network fetch) |
 | Date | `chrono` (Rust) + `dayjs` + `lib/buddhist.ts` (TS) |
 | DB | SQLite ผ่าน `tauri-plugin-sql` (sqlx-backed) |
 | OCR | `reqwest` → `api.anthropic.com/v1/messages` (model `claude-sonnet-4-6`) + tool_use schema |
