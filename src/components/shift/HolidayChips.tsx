@@ -1,31 +1,22 @@
 import { useState } from "react";
 import { Plus, X, CalendarOff } from "lucide-react";
-import dayjs from "dayjs";
-import { useHolidays, useAddHoliday, useRemoveHoliday } from "@/hooks/useShift";
+import { useHolidays, useRemoveHoliday } from "@/hooks/useShift";
 import { toThaiNumerals } from "@/lib/buddhist";
+import { HolidayPickerDialog } from "@/components/holiday/HolidayPickerDialog";
 
 /**
- * Inline chip-list of holiday days for the current month. Used on
- * ShiftMonthPage. Adding a holiday promotes ANY in-hour slot on that day
- * to off-hour pay (780 ฿) — see calc::is_off_hour.
+ * Inline holiday chip display on ShiftMonthPage.
+ *
+ * Chips show existing holidays — click X to remove. The "+เพิ่มวันหยุด"
+ * button opens HolidayPickerDialog (port of Shift_count's calendar
+ * popup pattern) for visual day selection.
  */
 export function HolidayChips({ yearMonth }: { yearMonth: string }) {
   const holidays = useHolidays(yearMonth);
-  const add = useAddHoliday();
   const remove = useRemoveHoliday();
-  const [open, setOpen] = useState(false);
-  const [dayInput, setDayInput] = useState("");
-  const [noteInput, setNoteInput] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const dim = dayjs(yearMonth + "-01").daysInMonth();
   const list = holidays.data ?? [];
-
-  function submit() {
-    const day = Number(dayInput);
-    if (!Number.isInteger(day) || day < 1 || day > dim) return;
-    add.mutate({ yearMonth, day, note: noteInput.trim() || undefined });
-    setDayInput(""); setNoteInput(""); setOpen(false);
-  }
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-4">
@@ -49,39 +40,16 @@ export function HolidayChips({ yearMonth }: { yearMonth: string }) {
           </button>
         ))}
 
-        {open ? (
-          <div className="flex items-center gap-1.5 rounded-full bg-zinc-50 px-2 py-1 ring-1 ring-zinc-200">
-            <input
-              type="number"
-              min={1}
-              max={dim}
-              autoFocus
-              placeholder="วันที่"
-              value={dayInput}
-              onChange={(e) => setDayInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") setOpen(false); }}
-              className="w-16 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs"
-            />
-            <input
-              type="text"
-              placeholder="เช่น 'แรงงาน'"
-              value={noteInput}
-              onChange={(e) => setNoteInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") submit(); if (e.key === "Escape") setOpen(false); }}
-              className="w-32 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs"
-            />
-            <button onClick={submit} className="rounded-md bg-rose-600 px-2 py-0.5 text-xs font-semibold text-white">เพิ่ม</button>
-            <button onClick={() => setOpen(false)} className="text-zinc-500 hover:text-zinc-800"><X className="h-3 w-3" /></button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setOpen(true)}
-            className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white hover:bg-rose-700"
-          >
-            <Plus className="h-3 w-3" /> เพิ่มวันหยุด
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white hover:bg-rose-700"
+        >
+          <Plus className="h-3 w-3" /> เพิ่มวันหยุด
+        </button>
       </div>
+
+      {pickerOpen && <HolidayPickerDialog yearMonth={yearMonth} onClose={() => setPickerOpen(false)} />}
     </section>
   );
 }
