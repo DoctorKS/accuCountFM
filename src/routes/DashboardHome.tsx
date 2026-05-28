@@ -15,7 +15,6 @@ export function DashboardHome() {
     <div className="mx-auto flex h-full max-w-5xl flex-col items-center justify-center gap-10 p-8">
       <header className="text-center">
         <h1 className="text-3xl font-bold tracking-tight text-zinc-900">accuCountFM</h1>
-        <p className="mt-2 text-sm text-zinc-500">คำนวณเงินเวรแพทย์นิติเวช · เลือกประเภทเวรที่ต้องการ</p>
       </header>
 
       <div className="grid w-full grid-cols-1 items-center gap-8 md:grid-cols-2">
