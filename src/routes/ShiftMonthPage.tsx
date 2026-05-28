@@ -1,25 +1,46 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Upload, ChevronRight } from "lucide-react";
 import dayjs from "dayjs";
-import type { ShiftType } from "@/lib/constants";
-import { SHIFT_TYPE_LABEL } from "@/lib/constants";
-import { DOCTORS } from "@/lib/doctors";
+import { type ShiftType, SHIFT_TYPE_LABEL } from "@/lib/constants";
+import { DOCTORS, DOCTOR_BG_CLASS } from "@/lib/doctors";
 import { currentYearMonth, formatBEMonth, toThaiNumerals } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
+import { useMonth } from "@/hooks/useShift";
+import { computeMonthByDoctor } from "@/lib/calc-month";
 
-/**
- * /out and /in — month-level dashboard:
- *   - Month/year picker (top-left, default = current month)
- *   - "+ เพิ่มตารางเวร" upload button (top-right) — wires to OCR dialog later
- *   - 4 doctor summary cards (อนิรุต / พฤพงศ์ / กนก / กวินท์)
- *
- * Stub: monthly totals shown as ฿ 0 until calc + DB wiring lands.
- */
+/** /out and /in — month picker, calendar grid, 4 doctor summary cards. */
 export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
   const [ym, setYm] = useState(currentYearMonth());
   const title = SHIFT_TYPE_LABEL[shiftType];
   const route = shiftType === "outHos" ? "out" : "in";
+
+  const month = useMonth(shiftType, ym);
+
+  const summary = useMemo(() => {
+    if (!month.data) return null;
+    return computeMonthByDoctor(shiftType, month.data.assignments, month.data.cases);
+  }, [month.data, shiftType]);
+
+  // Day-status hint for the calendar grid: red dot if all 3 slots assigned;
+  // amber dot if 1-2 slots assigned; gray if 0.
+  const dayStatus = useMemo(() => {
+    const m = new Map<string, { assigned: number; cases: number }>();
+    if (!month.data) return m;
+    for (const a of month.data.assignments) {
+      const entry = m.get(a.date) ?? { assigned: 0, cases: 0 };
+      if (a.doctor_name) entry.assigned += 1;
+      m.set(a.date, entry);
+    }
+    for (const c of month.data.cases) {
+      const entry = m.get(c.date) ?? { assigned: 0, cases: 0 };
+      entry.cases += 1;
+      m.set(c.date, entry);
+    }
+    return m;
+  }, [month.data]);
+
+  const dim = dayjs(`${ym}-01`).daysInMonth();
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -45,54 +66,63 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
 
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
           disabled
-          title="ฟีเจอร์ OCR จะเชื่อมหลัง backend พร้อม"
+          title="OCR upload จะเชื่อมในรอบถัดไป"
         >
           <Upload className="h-4 w-4" /> เพิ่มตารางเวร
         </button>
       </div>
 
-      {/* TODO: Interactive Buddhist calendar opens here when ym field is clicked */}
-      <div className="rounded-2xl border-2 border-dashed border-zinc-200 p-8 text-center text-sm text-zinc-400">
-        ปฏิทินรายวันของ {formatBEMonth(ym + "-01")} จะแสดงที่นี่ (กดวันที่ → เข้าหน้ากรอกเวร)
-        <div className="mt-3 grid grid-cols-7 gap-2">
-          {Array.from({ length: dayjs(ym + "-01").daysInMonth() }, (_, i) => i + 1).map((d) => {
+      <section className="rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="mb-3 text-sm font-semibold text-zinc-500">ปฏิทินรายวัน — {formatBEMonth(ym + "-01")}</div>
+        <div className="grid grid-cols-7 gap-2">
+          {Array.from({ length: dim }, (_, i) => i + 1).map((d) => {
             const date = `${ym}-${String(d).padStart(2, "0")}`;
+            const status = dayStatus.get(date);
+            const filled = status ? status.assigned : 0;
+            const dot = filled === 3 ? "bg-emerald-500" : filled > 0 ? "bg-amber-400" : "bg-zinc-200";
             return (
               <Link
                 key={d}
                 to={`/shift/${route}/${date}`}
-                className="rounded-lg border border-zinc-200 bg-white py-2 text-center text-xs font-medium text-zinc-700 hover:border-violet-300 hover:bg-violet-50"
+                className="group relative rounded-lg border border-zinc-200 bg-zinc-50 py-3 text-center text-sm font-medium text-zinc-700 hover:border-violet-300 hover:bg-violet-50"
               >
-                {toThaiNumerals(d)}
+                <div className="text-base font-semibold">{toThaiNumerals(d)}</div>
+                <div className={`mx-auto mt-1 h-1.5 w-1.5 rounded-full ${dot}`} />
+                {status && status.cases > 0 && (
+                  <div className="text-[10px] text-zinc-400 group-hover:text-violet-500">{toThaiNumerals(status.cases)} เคส</div>
+                )}
               </Link>
             );
           })}
         </div>
-      </div>
+      </section>
 
       <section>
         <h2 className="mb-3 text-sm font-semibold text-zinc-500">สรุปเงิน{title}ทั้งเดือน</h2>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {DOCTORS.map((d) => (
-            <div key={d} className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-              <div>
-                <div className="text-xs font-medium text-zinc-500">แพทย์</div>
-                <div className="text-lg font-semibold text-zinc-900">{d}</div>
+          {DOCTORS.map((d) => {
+            const ds = summary?.find((s) => s.doctor === d);
+            return (
+              <div key={d} className={`flex items-center justify-between rounded-xl p-4 shadow-sm ring-1 ${DOCTOR_BG_CLASS[d]}`}>
+                <div>
+                  <div className="text-xs font-medium text-zinc-500">แพทย์</div>
+                  <div className="text-lg font-semibold text-zinc-900">{d}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-zinc-500">ยอดรวม</div>
+                  <div className="text-xl font-bold text-zinc-900 tabular-nums">{fmtBaht(ds?.total ?? 0)}</div>
+                </div>
+                <Link
+                  to={`/breakdown/${route}/${encodeURIComponent(d)}/${ym}`}
+                  className="ml-3 inline-flex items-center gap-1 rounded-lg bg-white/70 px-3 py-1.5 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200 hover:bg-white"
+                >
+                  แจกแจง <ChevronRight className="h-3 w-3" />
+                </Link>
               </div>
-              <div className="text-right">
-                <div className="text-xs text-zinc-500">ยอดรวม</div>
-                <div className="text-xl font-bold text-zinc-900">{fmtBaht(0)}</div>
-              </div>
-              <Link
-                to={`/breakdown/${route}/${encodeURIComponent(d)}/${ym}`}
-                className="ml-3 inline-flex items-center gap-1 rounded-lg bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-100"
-              >
-                แจกแจงเงินเวร <ChevronRight className="h-3 w-3" />
-              </Link>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     </div>
