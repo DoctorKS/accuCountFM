@@ -51,23 +51,29 @@ Native Windows app, ไม่มี auth, เก็บ local-first บนเค�
 | ชันสูตรพลิกศพนอกรพ. | `outHos` (string literal) | "ชันสูตรนอก" / "เวรชันสูตรนอก" |
 | ชันสูตรพลิกศพในรพ. + รับปรึกษารพช. | `inHos` (string literal) | "ชันสูตรใน" / "เวรชันสูตรใน" |
 | ช่วงเวลาเวร | `slot` = `'0000-0800' \| '0800-1600' \| '1600-2400'` | "00.00–08.00 น." ฯลฯ |
-| ค่าเวร per slot (อยู่คนเดียว 8 ชม.) | `SHIFT_PAY_SOLO_8H = 780` | "เงินเวรพื้นฐาน 8 ชม." |
-| ค่าเวร per slot (chain 16 ชม.) | `SHIFT_PAY_CHAIN_16H = 760` | "เงินเวร 16 ชม." |
+| ค่าเวร per slot นอกเวลา | `OFF_HOUR_SHIFT_PAY = 780` | "เงินเวรนอกเวลา" |
+| ค่าเวร per slot ในเวลา | (= 0, ไม่มีค่าคงที่) | "ในเวลา ไม่ได้ค่าเวร" |
 | โบนัสต่อเคส (ชันสูตรนอก) | `CASE_BONUS_OUT_HOS = 1800` | "โบนัสเคสนอก" |
 | โบนัสต่อเคส (ชันสูตรใน) | `CASE_BONUS_IN_HOS = 1200` | "โบนัสเคสใน" |
 | หักครึ่ง ชม. ที่ออกจากเวร | `DEDUCT_PER_HALF_HOUR = 48.75` | |
 | Virtual time ต่อ 1 เคสใน (inHos) | `IN_HOS_MIN_PER_CASE = 10` | |
+| Grace period (ไม่หัก) | `GRACE_MIN = 4` | "1-4 นาทีแรกไม่หัก" |
+| **off-hour predicate** | `is_off_hour(date, slot, holidays)` | "นอกเวลา / ในเวลา" |
 
 ```rust
 // src-tauri/src/calc.rs — ห้ามเปลี่ยนค่าเหล่านี้โดยไม่ถาม
-pub const SHIFT_PAY_SOLO_8H:    f64 = 780.0;
-pub const SHIFT_PAY_CHAIN_16H:  f64 = 760.0;
+pub const OFF_HOUR_SHIFT_PAY:   f64 = 780.0;
 pub const CASE_BONUS_OUT_HOS:   f64 = 1800.0;
 pub const CASE_BONUS_IN_HOS:    f64 = 1200.0;
 pub const DEDUCT_PER_HALF_HOUR: f64 = 48.75;
 pub const IN_HOS_MIN_PER_CASE:  i32 = 10;
 pub const GRACE_MIN:            i32 = 4;   // 1..=4 นาที = ไม่หัก
 ```
+
+> **Historical note:** v1 (commits ก่อน `665b835`) ใช้ chain detection
+> (`SHIFT_PAY_SOLO_8H=780` / `SHIFT_PAY_CHAIN_16H=760`) — ดูหมอคนเดียวกัน
+> อยู่ติด slot ก่อน/หลังหรือไม่ ตอนนี้ทิ้งแล้ว ใช้ off-hour rule แทน
+> (อ้างอิงจาก `Shift_count/CLAUDE.md` § "เวรนอกเวลา rule")
 
 **Doctors — order matters for UI card layout:**
 ```ts
@@ -81,39 +87,45 @@ export type Doctor = typeof DOCTORS[number];
 
 `src/lib/calc.ts` คือ mirror สำหรับ live preview ตอน user พิมพ์ ห้าม diverge — ทั้งสองอ่าน fixture จาก `tests/calc-fixtures.json` (ดู §Testing)
 
-### Per-slot pay
+### Per-slot pay (v2 — off-hour rule)
 
 ```
-สำหรับ shift_assignment row หนึ่ง (shift_type, date, slot, doctor_name):
+สำหรับ shift_assignment row หนึ่ง (shift_type, date, slot, doctor_name)
+และรายการ holidays (day-of-month ints ใน month เดียวกับ date):
 
 1. base_pay:
    - ถ้า doctor_name = NULL → 0 (slot ไม่มีคน, เคสในนี้ไม่จ่ายให้ใคร)
-   - ถ้ามีคน เช็ค chain:
-       prev_slot = slot ก่อนหน้า (16-24 ของ date-1 ถ้า slot = 00-08; ไม่งั้น slot ก่อนของ date เดียวกัน)
-       next_slot = slot ถัดไป  (00-08 ของ date+1 ถ้า slot = 16-24; ไม่งั้น slot ถัดไปของ date เดียวกัน)
-       chained = (assignment[prev_slot].doctor == doctor) OR (assignment[next_slot].doctor == doctor)
-       base_pay = if chained then 760 else 780
-   หมายเหตุ: chain ถูกตรวจ **เฉพาะภายใน shift_type เดียวกัน** — outHos chain แยกจาก inHos chain
+   - else: ดู off_hour = is_off_hour(date, slot, holidays)
+       off-hour → base = 780 (OFF_HOUR_SHIFT_PAY)
+       in-hour  → base = 0
 
-2. minutes_out (per slot):
-   - outHos: minutes_out = Σ (return_time − leave_time) ทุก case ใน slot นั้น
-              negative diff (ลืมกรอกหรือกรอกผิด) → clamp ที่ 0 และ warn ใน UI
-              ข้ามเที่ยงคืน (return < leave) → +24h
+   is_off_hour rule:
+     - night slot (00-08 หรือ 16-24) บน weekday ที่ไม่ใช่นักขัตฤกษ์, **OR**
+     - any slot บน weekend (เสาร์/อาทิตย์), **OR**
+     - any slot บนวันนักขัตฤกษ์
+   → "ในเวลา" คือเฉพาะ 08-16 ของ weekday ที่ไม่ใช่นักขัตฤกษ์
+
+2. deduction — เฉพาะ off-hour slot เท่านั้น (in-hour base=0 อยู่แล้ว):
+   - outHos: minutes_out = Σ (return_time − leave_time) ทุก case ใน slot
+              cross-midnight (return < leave) → +24h
+              malformed time → 0
    - inHos:  minutes_out = case_count × IN_HOS_MIN_PER_CASE (= 10)
+   - units = if minutes_out ≤ GRACE_MIN then 0 else ceil((minutes_out − 4) / 30)
+   - deduction = units × DEDUCT_PER_HALF_HOUR (= 48.75)
+   - cap: deduction ≤ base (base goes to 0, doesn't go negative)
 
-3. deduction_units:
-   if minutes_out <= GRACE_MIN (4) → 0
-   else                            → ceil((minutes_out − GRACE_MIN) / 30)
-   deduction = deduction_units × DEDUCT_PER_HALF_HOUR
+3. case_bonus — จ่ายทุก case ไม่ว่าเวลาไหน (in-hour ก็ได้):
+   - outHos: case_count × 1800
+   - inHos:  case_count × 1200
 
-4. case_bonus:
-   outHos: case_count × CASE_BONUS_OUT_HOS (1800)
-   inHos:  case_count × CASE_BONUS_IN_HOS  (1200)
-
-5. slot_total = max(0, base_pay − deduction) + case_bonus
-   หมายเหตุ: deduction ใช้ base_pay เป็น cap; ไม่ทำให้ base ติดลบ.
-            case_bonus จ่ายเสมอตามจำนวนเคส แม้ deduction = base
+4. slot_total = (base − capped_deduction) + case_bonus
 ```
+
+**Why this design** (vs. v1 chain detection):
+- Matches Shift_count's `isOffHour` semantics — single shared concept
+- Hospital "เวรนอกเวลาราชการ" pay is the institutional definition; chain
+  detection was a misread of the original spec
+- Simpler: one local lookup vs. cross-day adjacency check
 
 ### Per-doctor month breakdown
 
@@ -213,6 +225,7 @@ secret: <sk-ant-...>
 |---|---|---|
 | `shift_assignments` | 1 row per (shift_type, date, slot) → doctor | (shift_type, date, slot) |
 | `shift_cases` | N rows per slot, ordered by `position` | id |
+| `holidays` | 1 row per (year_month, day) → optional note | (year_month, day) |
 | `ocr_uploads` | history ของรูปที่อัพ + raw JSON | id |
 | `settings` | misc key/value (last_view ฯลฯ; **ไม่เก็บ API key ที่นี่**) | key |
 
@@ -315,10 +328,11 @@ Shared fixtures: `tests/calc-fixtures.json` — `{ input: {assignments, cases}, 
 ## Common pitfalls (อ่านก่อนแก้ code)
 
 1. **อย่าใช้ Buddhist year ใน DB** — เก็บ ISO Gregorian (`2026-05-12`) เสมอ; แปลงเฉพาะตอน format
-2. **Chain detection ข้าม shift_type ไม่ได้** — หมอที่อยู่ outHos 16-24 + inHos 00-08 ของวันถัดไป **ไม่นับเป็น chain** (คนละประเภทเวร)
+2. **Holiday list ต้อง scope ให้ตรง month** — `is_off_hour` รับ day-of-month ints ที่ assumed เป็น month เดียวกับ `date`; ถ้าส่ง holidays จากเดือนอื่นจะตีเป็น flag false-positive
 3. **Cases ผูกกับ slot ไม่ใช่กับ doctor** — ถ้า user เปลี่ยน doctor ใน assignment, cases เดิมตาม slot ยังอยู่และเงินไปคนใหม่ (intended behavior; แจ้ง user via toast ตอนเปลี่ยน)
 4. **Cross-midnight time** — case ที่ออก 23:30 กลับ 00:15 → return < leave → ต้อง +24h ใน diff
 5. **Deduction cap** — `base − deduction` ห้ามต่ำกว่า 0 (ถึงแม้คนออกไป 8 ชม. เต็ม) — `case_bonus` ยังจ่ายปกติ
+   **In-hour slot:** base=0 อยู่แล้ว → ไม่ต้องคำนวณ deduction (calc.rs skip step นั้น)
 6. **OCR apply = REPLACE month, not merge** — confirm dialog ต้องบอกชัดว่าจะทับของเดิม. แต่ `shift_cases` ของเดือนนั้นไม่ถูกแตะ — cases ผูกกับ slot, assignment ถูก overwrite ก็ยังหา slot เดิมเจอ
 7. **Empty slot pays 0** — assignment.doctor=NULL + cases อยู่ → cases ไม่จ่ายให้ใคร แต่ DB เก็บไว้ (user มา assign ทีหลังได้)
 8. **`tauri-plugin-sql` migration runs at first connect** — ต้อง register ทุก migration ใน `src-tauri/src/main.rs` ไม่ใช่แค่วางไฟล์ใน folder
@@ -343,10 +357,10 @@ Shared fixtures: `tests/calc-fixtures.json` — `{ input: {assignments, cases}, 
 1. **อ่าน CLAUDE.md ก่อน**
 2. **ยืนยันว่า change ตรงกับ rule ใน "Calculation rules" section** — ถ้าไม่ตรงต้องอัพเดทเอกสารก่อนเขียน code
 3. **ถ้า change แตะ**:
-   - ค่าคงที่ใน "Domain language" table (780/760/1800/1200/48.75/10/4)
-   - shape ของ shift_assignments / shift_cases / ocr_uploads
+   - ค่าคงที่ใน "Domain language" table (780/1800/1200/48.75/10/4)
+   - shape ของ shift_assignments / shift_cases / ocr_uploads / holidays
    - OCR tool_use input_schema
-   - chain detection rule
+   - off-hour rule (is_off_hour)
    - deduction formula
    → **STOP บอกเจ้าของแอปก่อน รอ go-ahead**
 4. **ห้ามเปลี่ยน Rust ↔ TS calc โดยไม่อัพเดททั้งคู่** — ไม่ allow drift
