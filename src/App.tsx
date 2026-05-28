@@ -6,6 +6,7 @@ import { ShiftDayPage } from "@/routes/ShiftDayPage";
 import { DoctorBreakdownPage } from "@/routes/DoctorBreakdownPage";
 import { TotalSummary } from "@/routes/TotalSummary";
 import { SettingsPage } from "@/routes/SettingsPage";
+import { ShortcutsPage } from "@/routes/ShortcutsPage";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/summary" element={<TotalSummary mode="all" />} />
           <Route path="/summary/out" element={<TotalSummary mode="outHos" />} />
           <Route path="/summary/in" element={<TotalSummary mode="inHos" />} />
+          <Route path="/shortcuts" element={<ShortcutsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
