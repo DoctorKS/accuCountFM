@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Upload, ChevronRight } from "lucide-react";
+import { ArrowLeft, Upload, ChevronRight, ClipboardList } from "lucide-react";
 import dayjs from "dayjs";
 import { type ShiftType, SHIFT_TYPE_LABEL } from "@/lib/constants";
 import { DOCTORS, DOCTOR_BG_CLASS } from "@/lib/doctors";
@@ -9,11 +9,14 @@ import { fmtBaht } from "@/lib/utils";
 import { useMonth } from "@/hooks/useShift";
 import { computeMonthByDoctor } from "@/lib/calc-month";
 import { OcrDialog } from "@/components/ocr/OcrDialog";
+import { VerifyDialog } from "@/components/verify/VerifyDialog";
+import { HolidayChips } from "@/components/shift/HolidayChips";
 
 /** /out and /in — month picker, calendar grid, 4 doctor summary cards. */
 export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
   const [ym, setYm] = useState(currentYearMonth());
   const [ocrOpen, setOcrOpen] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
   const title = SHIFT_TYPE_LABEL[shiftType];
   const route = shiftType === "outHos" ? "out" : "in";
 
@@ -66,16 +69,28 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
           <span className="mt-1 text-sm font-semibold text-zinc-700">{formatBEMonth(ym + "-01")}</span>
         </label>
 
-        <button
-          type="button"
-          onClick={() => setOcrOpen(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
-        >
-          <Upload className="h-4 w-4" /> เพิ่มตารางเวร
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setVerifyOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-800 ring-1 ring-zinc-200 hover:bg-zinc-200"
+          >
+            <ClipboardList className="h-4 w-4" /> ตรวจสอบตารางเวร
+          </button>
+          <button
+            type="button"
+            onClick={() => setOcrOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
+          >
+            <Upload className="h-4 w-4" /> เพิ่มตารางเวร
+          </button>
+        </div>
       </div>
 
+      <HolidayChips yearMonth={ym} />
+
       {ocrOpen && <OcrDialog yearMonth={ym} onClose={() => setOcrOpen(false)} />}
+      {verifyOpen && <VerifyDialog yearMonth={ym} onClose={() => setVerifyOpen(false)} />}
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="mb-3 text-sm font-semibold text-zinc-500">ปฏิทินรายวัน — {formatBEMonth(ym + "-01")}</div>
@@ -85,17 +100,27 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
             const status = dayStatus.get(date);
             const filled = status ? status.assigned : 0;
             const dot = filled === 3 ? "bg-emerald-500" : filled > 0 ? "bg-amber-400" : "bg-zinc-200";
+            const dt = new Date(date + "T00:00:00Z");
+            const dow = dt.getUTCDay();
+            const isWeekend = dow === 0 || dow === 6;
+            const isHoliday = (month.data?.holidays ?? []).includes(d);
+            const baseBg =
+              isHoliday ? "bg-rose-50 border-rose-300" :
+              isWeekend ? "bg-amber-50 border-amber-200" :
+              "bg-zinc-50 border-zinc-200";
             return (
               <Link
                 key={d}
                 to={`/shift/${route}/${date}`}
-                className="group relative rounded-lg border border-zinc-200 bg-zinc-50 py-3 text-center text-sm font-medium text-zinc-700 hover:border-violet-300 hover:bg-violet-50"
+                className={`group relative rounded-lg border py-3 text-center text-sm font-medium text-zinc-700 hover:border-violet-300 hover:bg-violet-50 ${baseBg}`}
+                title={isHoliday ? "วันหยุดนักขัตฤกษ์" : isWeekend ? "วันหยุดสุดสัปดาห์" : ""}
               >
                 <div className="text-base font-semibold">{toThaiNumerals(d)}</div>
                 <div className={`mx-auto mt-1 h-1.5 w-1.5 rounded-full ${dot}`} />
                 {status && status.cases > 0 && (
                   <div className="text-[10px] text-zinc-400 group-hover:text-violet-500">{toThaiNumerals(status.cases)} เคส</div>
                 )}
+                {isHoliday && <div className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-rose-500" />}
               </Link>
             );
           })}
