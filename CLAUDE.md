@@ -398,7 +398,15 @@ Shared fixtures: `tests/calc-fixtures.json` — `{ input: {assignments, cases}, 
 
 ## Release / distribution
 
-ดู [BUILD.md](BUILD.md) สำหรับ end-to-end guide ของการ build installer ส่ง user เครื่องเปล่า (no Node, no Rust, no anything).
+End-to-end guides for shipping the installer to clean Windows machines:
+
+- [**BUILD.md**](BUILD.md) — prereqs (Node + Rust + VS Build Tools),
+  `npm run tauri:build`, output layout, WebView2 modes, end-user
+  install flow, version bumping, CI workflow stub, pre-flight checklist.
+- [**SIGN.md**](SIGN.md) — code-signing to suppress SmartScreen.
+  §A self-signed (ฟรี, wired end-to-end via `tools/sign.ps1` +
+  `bundle.windows.signCommand`), §B SignPath Foundation (ฟรีสำหรับ OSS
+  — repo ต้อง public), §C paid menu.
 
 Quick recap:
 ```powershell
@@ -407,12 +415,18 @@ npm run tauri:build
 ```
 
 Pre-flight checklist (run all 4 before shipping):
-1. `npm run test`       — vitest fixtures
-2. `cd src-tauri && cargo test --lib` — calc.rs unit tests
-3. `npx tsc --noEmit`   — TS type-check
-4. `npm run tauri:build` — produces the installer
+1. `npm run test`                       — vitest fixtures
+2. `cd src-tauri && cargo test --lib`   — calc.rs unit tests
+3. `npx tsc --noEmit`                   — TS type-check
+4. `npm run tauri:build`                — produces the installer
 
 Bump version in **three** places in lockstep (script-able via `cargo-edit`):
 - `package.json::version`
 - `src-tauri/tauri.conf.json::version`
 - `src-tauri/Cargo.toml::package.version`
+
+Sign-related files (per SIGN.md):
+- `tools/setup-self-signed.ps1` + `tools/sign.ps1` — committed scripts
+- `tools/signing.pfx` + `tools/*.cer` — **gitignored** (private cert + the
+  public copy shipped to users). Never commit either; back up the `.pfx`
+  off-machine.

@@ -98,7 +98,11 @@ Tell the end user:
 2. If Windows SmartScreen complains "unrecognized app":
    - Click **More info**
    - Click **Run anyway**
-   (Happens because the installer isn't code-signed — see §6.)
+   (Unsigned-installer warning — see §7 for how to remove it via code-signing.
+   If you ship a `.cer` publisher cert alongside the installer and the user
+   imports it once into Trusted Publishers, the warning stops appearing
+   for every subsequent install signed with the same cert — see
+   [SIGN.md §A](SIGN.md#a--self-signed-certificate-truly-free-semi-effective).)
 3. Click **Next → Install → Finish**.
 4. Open `accuCountFM` from the Start Menu.
 5. First-time setup (optional, only needed if you want OCR):
@@ -164,24 +168,40 @@ Unsigned installers always trigger Windows SmartScreen:
 User can click "More info → Run anyway" to bypass.
 
 To get rid of the warning, **code-sign** the installer. The repo ships
-two free routes (self-signed and SignPath Foundation) plus a paid menu
-— full step-by-step in [**SIGN.md**](SIGN.md).
+two free routes plus paid options — full step-by-step in
+[**SIGN.md**](SIGN.md):
 
-Quick recap of the self-signed flow (already wired into `tauri.conf.json`):
+- **§A Self-signed cert** — truly free, wired end-to-end. Ship the
+  `.cer` publisher cert alongside the installer; user imports once into
+  Trusted Publishers and the warning stops appearing for that cert's
+  signed artifacts. (Defender's URL reputation may still flag the first
+  download — that's a separate system.)
+- **§B SignPath Foundation** — free real CA cert, but requires the repo
+  to be public open-source. Best SmartScreen result.
+- **§C Paid options** — Sectigo OV/EV, DigiCert EV, Azure Trusted Signing.
+
+Quick recap of the self-signed flow (already wired into `tauri.conf.json`
+→ `bundle.windows.signCommand`, calls `tools/sign.ps1` per artifact):
 
 ```powershell
-# One-time:
+# One-time on the build machine (creates tools/signing.pfx + .cer):
 $env:ACCUCOUNT_SIGN_PASSWORD = "your-password"
 powershell -ExecutionPolicy Bypass -File tools/setup-self-signed.ps1
 
-# Every build:
+# Every build — set these in the SAME PowerShell session as tauri:build:
 $env:ACCUCOUNT_SIGN_PFX      = "C:\dev\accuCountFM\tools\signing.pfx"
 $env:ACCUCOUNT_SIGN_PASSWORD = "your-password"
 npm run tauri:build
 ```
 
-Tauri picks up `bundle.windows.signCommand` and runs `tools/sign.ps1`
-against every produced artifact automatically.
+Tooling files (all committed; secrets gitignored):
+
+| File | Role |
+|---|---|
+| `tools/setup-self-signed.ps1`     | one-time cert generator |
+| `tools/sign.ps1`                  | Tauri calls this per artifact |
+| `tools/signing.pfx`               | private cert (gitignored — back up off-machine) |
+| `tools/accuCountFM-publisher.cer` | public cert; ship alongside installer |
 
 ---
 

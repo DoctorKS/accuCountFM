@@ -114,8 +114,16 @@ SQLite, fonts, logos) มาในไฟล์เดียว ติดตั้
 ครั้งแรกที่เปิด Windows SmartScreen อาจขึ้น warning เพราะยังไม่ code-signed
 → คลิก **More info** → **Run anyway**
 
-> สำหรับนักพัฒนา / release engineer: ดู [BUILD.md](BUILD.md) สำหรับวิธีสร้าง
-> installer (`npm run tauri:build`), code-signing, GitHub Actions CI ฯลฯ
+ถ้า release engineer แนบไฟล์ `accuCountFM-publisher.cer` มาด้วย (self-signed
+publisher certificate) สามารถ import ครั้งเดียวเพื่อกัน warning ในอนาคต:
+```powershell
+Import-Certificate -FilePath .\accuCountFM-publisher.cer `
+  -CertStoreLocation Cert:\LocalMachine\TrustedPublisher  # admin PowerShell
+```
+
+> สำหรับนักพัฒนา / release engineer:
+> - [BUILD.md](BUILD.md) — วิธีสร้าง installer (`npm run tauri:build`), WebView2 bundling, CI
+> - [SIGN.md](SIGN.md) — code-signing tooling (self-sign ฟรี, SignPath Foundation ฟรี-สำหรับ-OSS, paid options)
 
 ### ตั้งค่าครั้งแรก
 1. เปิดแอป → Sidebar → **ตั้งค่า**
