@@ -41,9 +41,10 @@ function LogoButton({ to, src, alt }: { to: string; src: string; alt: string }) 
         src={src}
         alt={alt}
         draggable={false}
-        // max-w keeps the image from stretching on huge screens; mx-auto
-        // centres it inside its half of the grid; drop-shadow tightens on hover.
-        className="mx-auto max-h-[320px] w-full max-w-xs object-contain drop-shadow-md transition-all duration-150 group-hover:drop-shadow-xl"
+        // 1.5× the original 320px clamps (max-w-xs → 480px, max-h 320 → 480)
+        // — keeps the image from stretching on huge screens while making
+        // the buttons visually dominant.
+        className="mx-auto max-h-[480px] w-full max-w-[480px] object-contain drop-shadow-md transition-all duration-150 group-hover:drop-shadow-xl"
       />
     </Link>
   );

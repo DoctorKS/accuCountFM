@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Upload, ChevronRight, ClipboardList } from "lucide-react";
 import { type ShiftType, SHIFT_TYPE_LABEL } from "@/lib/constants";
 import { DOCTORS, DOCTOR_BG_CLASS } from "@/lib/doctors";
@@ -32,6 +32,27 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
   const [verifyOpen, setVerifyOpen] = useState(false);
   const title = SHIFT_TYPE_LABEL[shiftType];
   const route = shiftType === "outHos" ? "out" : "in";
+  const navigate = useNavigate();
+
+  /**
+   * PageDown → back to Dashboard. No completeness guard here because the
+   * month page doesn't own any pending edits — cases are edited inside
+   * ShiftDayPage which has its own guard.
+   * Skip when an OCR or Verify modal is open so PageDown inside the modal
+   * (e.g. scrolling its content) doesn't blow it away.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "PageDown") return;
+      if (ocrOpen || verifyOpen) return;
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === "textarea" || tag === "input" || tag === "select") return;
+      e.preventDefault();
+      navigate("/");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate, ocrOpen, verifyOpen]);
 
   const month = useMonth(shiftType, ym);
 
@@ -67,7 +88,9 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
           <ArrowLeft className="h-4 w-4" /> กลับหน้าหลัก
         </Link>
         <h1 className="text-2xl font-bold">{title}</h1>
-        <div className="w-24" />
+        <div className="w-32 text-right text-[10px] text-zinc-400">
+          กด PageDown เพื่อกลับ
+        </div>
       </div>
 
       <div className="flex items-end justify-between gap-4">
