@@ -393,3 +393,26 @@ Shared fixtures: `tests/calc-fixtures.json` — `{ input: {assignments, cases}, 
 - `.claude/skills/engineering/explain-before-edit/SKILL.md` (preview-before-edit สำหรับ change ใหญ่)
 - `.claude/skills/engineering/scrutinize/SKILL.md` (รอบ review ก่อน submit)
 - repo `Shift_count` (https://github.com/DoctorKS/Shift_count) เป็น OCR contract reference — copy system prompt + tool schema มาแต่ ตัด `patient` ทิ้ง
+
+---
+
+## Release / distribution
+
+ดู [BUILD.md](BUILD.md) สำหรับ end-to-end guide ของการ build installer ส่ง user เครื่องเปล่า (no Node, no Rust, no anything).
+
+Quick recap:
+```powershell
+npm run tauri:build
+# → src-tauri/target/release/bundle/{msi,nsis}/accuCountFM_<ver>_x64*.{msi,exe}
+```
+
+Pre-flight checklist (run all 4 before shipping):
+1. `npm run test`       — vitest fixtures
+2. `cd src-tauri && cargo test --lib` — calc.rs unit tests
+3. `npx tsc --noEmit`   — TS type-check
+4. `npm run tauri:build` — produces the installer
+
+Bump version in **three** places in lockstep (script-able via `cargo-edit`):
+- `package.json::version`
+- `src-tauri/tauri.conf.json::version`
+- `src-tauri/Cargo.toml::package.version`

@@ -105,46 +105,60 @@ Installer ~12 MB · ติดตั้งแล้ว ~25 MB · ต้องก�
 
 ### ดาวน์โหลด installer
 ```
-GitHub Releases → accuCountFM_<version>_x64.msi → double-click → ติดตั้ง
+GitHub Releases → accuCountFM_<version>_x64-setup.exe → double-click → ติดตั้ง
 ```
 
+**ไม่ต้องลงอะไรเพิ่มเติม** — installer pack ทุกอย่าง (Rust binary, frontend,
+SQLite, fonts, logos) มาในไฟล์เดียว ติดตั้งบนเครื่องเปล่า Windows 10/11 ได้เลย
+
+ครั้งแรกที่เปิด Windows SmartScreen อาจขึ้น warning เพราะยังไม่ code-signed
+→ คลิก **More info** → **Run anyway**
+
+> สำหรับนักพัฒนา / release engineer: ดู [BUILD.md](BUILD.md) สำหรับวิธีสร้าง
+> installer (`npm run tauri:build`), code-signing, GitHub Actions CI ฯลฯ
+
 ### ตั้งค่าครั้งแรก
-1. เปิดแอป → ไปหน้า **Settings (⚙️)**
-2. ใส่ **Anthropic API Key** (`sk-ant-...`)
+1. เปิดแอป → Sidebar → **ตั้งค่า**
+2. ใส่ **Anthropic API Key** (`sk-ant-...`) — สำหรับ OCR ตารางเวร
    - หาได้ที่ https://console.anthropic.com/settings/keys
-   - Key เก็บใน Windows Credential Manager (encrypted by OS)
-3. เลือก folder default สำหรับ Export Excel
-4. เริ่มใช้งานได้
+   - Key เก็บใน Windows Credential Manager (encrypted by Windows DPAPI)
+3. กลับ Dashboard → คลิกปุ่ม **เวรชันสูตรนอก** หรือ **เวรชันสูตรใน**
+4. เริ่มกรอกตารางเวรได้เลย
+
+### ปุ่มลัด (keyboard shortcuts)
+ในแอปมีหน้า **ปุ่มลัด** (Sidebar) สรุป F1 / F2 / F3 / PageDown / Enter / Esc
+ที่ใช้ได้ — ดูเพื่อกรอกข้อมูลเร็วขึ้นโดยไม่ใช้เมาส์
 
 ---
 
 ## 🧑‍💻 Build จาก source
 
-### Prerequisites
-- Node.js 20+
-- Rust 1.78+ (stable toolchain)
-- `cargo install tauri-cli --version "^2.0.0"`
-- Windows: ต้องมี Microsoft Edge WebView2 Runtime (มากับ Win10 1803+ และ Win11 อยู่แล้ว)
+> Full step-by-step — installing Rust + VS Build Tools, configuring WebView2
+> bundling, code-signing, CI — อยู่ใน [**BUILD.md**](BUILD.md)
 
-### Dev
+### Quick start
+
 ```powershell
+# Prereqs: Node 20+, Rust 1.78+, VS 2022 Build Tools w/ "Desktop dev with C++"
 npm install
-npm run tauri dev
+npm run tauri:dev       # hot-reload dev mode
 ```
 
-### Production build
+### Production installer
+
 ```powershell
-npm run tauri build
-# output: src-tauri/target/release/bundle/msi/accuCountFM_<version>_x64.msi
+npm run tauri:build
+# Output:
+#   src-tauri\target\release\bundle\msi\accuCountFM_0.1.0_x64_en-US.msi
+#   src-tauri\target\release\bundle\nsis\accuCountFM_0.1.0_x64-setup.exe
 ```
 
 ### Test
-```powershell
-# Rust unit tests (calc.rs, db.rs)
-cd src-tauri && cargo test
 
-# TS mirror test (calc.ts มี fixtures เดียวกับ Rust)
-npm run test
+```powershell
+cd src-tauri ; cargo test --lib   # Rust calc unit tests (14)
+cd ..        ; npm run test       # TS calc mirror tests (19)
+              ; npx tsc --noEmit  # type-check
 ```
 
 ---
@@ -200,7 +214,10 @@ npm run test
 
 ## 🤝 Contributing
 
-Internal app for one clinic — accepting issues for bugs, not PRs. ถ้าจะ fork ไปใช้ที่อื่น แก้ `DOCTORS` const ใน `src/lib/doctors.ts` และ Anthropic API endpoint ใน `src-tauri/src/ocr.rs`
+Internal app for one clinic — accepting issues for bugs, not PRs. ถ้าจะ fork ไปใช้ที่อื่น แก้:
+- `DOCTORS` const ใน [`src/lib/doctors.ts`](src/lib/doctors.ts)
+- Color mapping ใน OCR prompt (`src-tauri/src/ocr.rs`)
+- Calculation constants ใน `src/lib/constants.ts` + `src-tauri/src/calc.rs` (lockstep)
 
 ---
 
