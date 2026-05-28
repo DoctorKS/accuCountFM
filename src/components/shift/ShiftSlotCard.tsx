@@ -1,10 +1,9 @@
-import { useState } from "react";
 import { Plus } from "lucide-react";
 import type { Slot, ShiftType } from "@/lib/constants";
 import { SLOT_LABEL } from "@/lib/constants";
 import { DOCTORS, type Doctor, isDoctor } from "@/lib/doctors";
 import { CaseRow } from "./CaseRow";
-import { useSetAssignment, useAddCase } from "@/hooks/useShift";
+import { useSetAssignment } from "@/hooks/useShift";
 import type { CaseRow as CaseRowT } from "@/lib/db";
 import type { SlotComputed } from "@/lib/calc-month";
 
@@ -15,10 +14,13 @@ import type { SlotComputed } from "@/lib/calc-month";
  * Breakdown for THIS slot's pay is now rendered in the right-side gray
  * panel (SlotBreakdownCard) — keeps the slot card focused on input.
  *
- * Enter in any case's CS input → mutation + auto-focus the new row.
+ * `focusCaseId` and `onAddCase` are lifted up to ShiftDayPage so the
+ * F1-F3 keyboard shortcuts can spawn-and-focus a row in any slot from
+ * one shared piece of state (rather than each card tracking its own).
  */
 export function ShiftSlotCard({
   shiftType, date, slot, assignedDoctor, cases, computed,
+  focusCaseId, onAddCase,
 }: {
   shiftType: ShiftType;
   date: string;
@@ -26,17 +28,10 @@ export function ShiftSlotCard({
   assignedDoctor: Doctor | null;
   cases: CaseRowT[];
   computed: SlotComputed | null;
+  focusCaseId: number | null;
+  onAddCase: () => void;
 }) {
   const setAssign = useSetAssignment();
-  const addCase = useAddCase();
-  const [focusCaseId, setFocusCaseId] = useState<number | null>(null);
-
-  const addAndMaybeFocus = (focusAfter: boolean) => {
-    addCase.mutate(
-      { shiftType, date, slot },
-      { onSuccess: (newId) => { if (focusAfter) setFocusCaseId(newId); } },
-    );
-  };
 
   return (
     <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -76,7 +71,7 @@ export function ShiftSlotCard({
               row={c}
               shiftType={shiftType}
               autoFocus={c.id === focusCaseId}
-              onAddNext={() => addAndMaybeFocus(true)}
+              onAddNext={onAddCase}
             />
           ))
         )}
@@ -85,7 +80,7 @@ export function ShiftSlotCard({
       <div className="mt-3">
         <button
           type="button"
-          onClick={() => addAndMaybeFocus(true)}
+          onClick={onAddCase}
           className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200"
         >
           <Plus className="h-3 w-3" /> เพิ่มเคสชันสูตร

@@ -1,11 +1,11 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SLOTS, SHIFT_TYPE_LABEL, type ShiftType, type Slot, CASE_BONUS_OUT_HOS, CASE_BONUS_IN_HOS } from "@/lib/constants";
 import { formatBEFullDate } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
-import { useMonth } from "@/hooks/useShift";
+import { useMonth, useAddCase } from "@/hooks/useShift";
 import { computeDay } from "@/lib/calc-month";
 import { ShiftSlotCard } from "@/components/shift/ShiftSlotCard";
 import { SlotBreakdownCard } from "@/components/shift/SlotBreakdownCard";
@@ -35,6 +35,20 @@ export function ShiftDayPage() {
   }, [month.data, shiftType, date]);
 
   /**
+   * Spawn-and-focus state, lifted up so F1-F3 shortcuts can target any
+   * slot (used to live in each ShiftSlotCard separately).
+   */
+  const [focusCaseId, setFocusCaseId] = useState<number | null>(null);
+  const addCase = useAddCase();
+  const addCaseToSlot = useCallback((slot: Slot) => {
+    if (!date) return;
+    addCase.mutate(
+      { shiftType, date, slot },
+      { onSuccess: (newId) => setFocusCaseId(newId) },
+    );
+  }, [date, shiftType, addCase]);
+
+  /**
    * Guard the "back" action: any incomplete case (missing CS / leave / return)
    * blocks navigation. We blur the active input first so the most recent
    * keystroke gets flushed before the DB read.
@@ -53,20 +67,39 @@ export function ShiftDayPage() {
     return true;
   }, [month.data, date, shiftType]);
 
-  /** PageDown → "back one level" (same guard). */
+  /**
+   * Keyboard shortcuts:
+   *   PageDown → guardBack → navigate(backTo)
+   *   F1       → spawn case in slot 0000-0800 + focus the new row
+   *   F2       → spawn case in slot 0800-1600
+   *   F3       → spawn case in slot 1600-2400
+   *
+   * preventDefault on F1-F3 because browsers map F1=Help, F2=rename,
+   * F3=Find by default. preventDefault on PageDown to override page-scroll.
+   */
   useEffect(() => {
+    const SLOT_BY_KEY: Record<string, Slot> = {
+      F1: "0000-0800",
+      F2: "0800-1600",
+      F3: "1600-2400",
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "PageDown") return;
-      // Skip when typing into a contenteditable / form field that would
-      // legitimately consume PageDown (e.g. selects, textareas).
-      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
-      if (tag === "textarea") return;
-      e.preventDefault();
-      if (guardBack()) navigate(backTo);
+      if (e.key === "PageDown") {
+        const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+        if (tag === "textarea") return;
+        e.preventDefault();
+        if (guardBack()) navigate(backTo);
+        return;
+      }
+      const slot = SLOT_BY_KEY[e.key];
+      if (slot) {
+        e.preventDefault();
+        addCaseToSlot(slot);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [guardBack, navigate, backTo]);
+  }, [guardBack, navigate, backTo, addCaseToSlot]);
 
   // Per-doctor totals — sum across the 3 slots if same doctor.
   const perDoctor = useMemo(() => {
@@ -98,8 +131,9 @@ export function ShiftDayPage() {
           <div className="text-xs text-zinc-500">{SHIFT_TYPE_LABEL[shiftType]}</div>
           <h1 className="text-xl font-bold">{date ? formatBEFullDate(date) : "—"}</h1>
         </div>
-        <div className="w-24 text-right text-[10px] text-zinc-400">
-          กด PageDown เพื่อกลับ
+        <div className="w-44 text-right text-[10px] text-zinc-400 leading-tight">
+          <div>กด PageDown เพื่อกลับ</div>
+          <div>F1 / F2 / F3 = เพิ่มเคสใน slot 1 / 2 / 3</div>
         </div>
       </div>
 
@@ -123,6 +157,8 @@ export function ShiftDayPage() {
                   assignedDoctor={doctor}
                   cases={cases}
                   computed={day?.slots[slot] ?? null}
+                  focusCaseId={focusCaseId}
+                  onAddCase={() => addCaseToSlot(slot)}
                 />
               );
             })}
