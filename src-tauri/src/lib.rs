@@ -10,6 +10,7 @@
 // it in TS for live preview, but persisted totals must come from here.
 
 pub mod calc;
+pub mod excel;
 pub mod keys;
 pub mod ocr;
 
@@ -48,13 +49,14 @@ pub fn run() {
             commands::clear_api_key,
             commands::has_api_key,
             commands::ocr_run,
+            commands::export_month_xlsx,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
 mod commands {
-    use crate::{keys, ocr};
+    use crate::{excel, keys, ocr};
     use serde::Serialize;
     use std::path::PathBuf;
 
@@ -113,5 +115,12 @@ mod commands {
             return Err(format!("ไม่พบไฟล์: {}", path.display()));
         }
         ocr::run_ocr(&path, &year_month, &key, holidays.as_deref().unwrap_or(&[])).await
+    }
+
+    // ─── Excel export ───────────────────────────────────────────────────────
+
+    #[tauri::command]
+    pub fn export_month_xlsx(payload: excel::ExportPayload) -> Result<excel::ExportResult, String> {
+        excel::write_workbook(&payload)
     }
 }

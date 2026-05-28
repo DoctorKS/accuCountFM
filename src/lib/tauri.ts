@@ -33,3 +33,40 @@ export const ocrRun = (params: { imagePath: string; yearMonth: string; holidays?
     yearMonth: params.yearMonth,
     holidays: params.holidays ?? [],
   });
+
+// ─── Excel export ───────────────────────────────────────────────────────────
+
+import type { ShiftType, Slot } from "./constants";
+
+export interface AssignmentForExport {
+  shiftType: ShiftType;
+  date: string;
+  slot: Slot;
+  doctorName: string | null;
+}
+
+export interface CaseForExport {
+  shiftType: ShiftType;
+  date: string;
+  slot: Slot;
+  leaveTime: string | null;
+  returnTime: string | null;
+}
+
+export interface ShiftBundle {
+  assignments: AssignmentForExport[];
+  cases: CaseForExport[];
+}
+
+export interface ExportPayload {
+  yearMonth: string;
+  savePath: string;
+  outHos: ShiftBundle | null;
+  inHos: ShiftBundle | null;
+}
+
+export interface DoctorTotal { outHos: number; inHos: number; total: number }
+export interface ExportResult { path: string; doctorTotals: Record<string, DoctorTotal> }
+
+export const exportMonthXlsx = (payload: ExportPayload) =>
+  invoke<ExportResult>("export_month_xlsx", { payload });
