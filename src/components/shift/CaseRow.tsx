@@ -70,9 +70,13 @@ export function CaseRow({
           ref={inputRef}
           type="text"
           inputMode="numeric"
+          pattern="[0-9]*"
           placeholder="หมายเลข CS"
           value={prefix}
-          onChange={(e) => setPrefix(e.target.value)}
+          // Strip non-digits in onChange so the input is digits-only regardless
+          // of input method (typing, paste, IME). Keeping type="text" gives us
+          // full control — type="number" would allow "e", "+", "-", ".".
+          onChange={(e) => setPrefix(e.target.value.replace(/\D/g, ""))}
           onBlur={flush}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
