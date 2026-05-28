@@ -9,6 +9,7 @@ import type { Slot } from "@/lib/constants";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatBEMonth } from "@/lib/buddhist";
 import { Link } from "react-router-dom";
+import { OcrSkullOverlay, SkullSpinner } from "@/components/ui/SkullSpinner";
 
 /**
  * Modal: pick image → invoke OCR → preview → apply.
@@ -112,7 +113,9 @@ export function OcrDialog({ yearMonth, onClose }: { yearMonth: string; onClose: 
                     disabled={busy !== "idle"}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
                   >
-                    {busy === "ocr" ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    {busy === "ocr"
+                      ? <SkullSpinner size={14} className="text-white" />
+                      : null}
                     ส่งให้ OCR อ่าน
                   </button>
                 </div>
@@ -142,6 +145,9 @@ export function OcrDialog({ yearMonth, onClose }: { yearMonth: string; onClose: 
           </footer>
         )}
       </div>
+
+      {/* Full-screen skull overlay during OCR — port of Shift_count's UX. */}
+      {busy === "ocr" && <OcrSkullOverlay message="กำลังประมวลผล OCR…" />}
     </div>
   );
 }
