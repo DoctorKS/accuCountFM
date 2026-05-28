@@ -58,42 +58,54 @@ export function DoctorBreakdownPage() {
                   <th className="px-4 py-3 text-left">ช่วงเวลา</th>
                   <th className="px-4 py-3 text-right">ฐาน</th>
                   <th className="px-4 py-3 text-right">หักเวลาออก</th>
+                  <th className="px-4 py-3 text-right">ค่าชม.เวรนอกเวลา<span className="text-zinc-400">(ต่อวัน)</span></th>
                   <th className="px-4 py-3 text-right">เคสชันสูตร</th>
                   <th className="px-4 py-3 text-right">รวม</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {summary.slots.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-zinc-400">ยังไม่มีเวรในเดือนนี้</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-6 text-center text-zinc-400">ยังไม่มีเวรในเดือนนี้</td></tr>
                 )}
-                {summary.slots.map((s) => (
-                  <tr key={`${s.date}|${s.slot}`} className="hover:bg-zinc-50">
-                    <td className="px-4 py-2 font-mono text-xs tabular-nums">{s.date}</td>
-                    <td className="px-4 py-2">
-                      {SLOT_LABEL[s.slot]}{" "}
-                      {s.pay.offHour ? (
-                        <span className="ml-1 text-[10px] text-rose-600">นอกเวลา</span>
-                      ) : (
-                        <span className="ml-1 text-[10px] text-zinc-400">ในเวลา</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums">{fmtBaht(s.pay.base)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-rose-600">
-                      {s.pay.deduction ? "−" + fmtBaht(s.pay.deduction) : "—"}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-emerald-700">
-                      {s.caseCount > 0
-                        ? <><span className="tabular-nums">{s.caseCount}</span> × {caseRate.toLocaleString()}</>
-                        : <span className="text-zinc-300">—</span>}
-                    </td>
-                    <td className="px-4 py-2 text-right font-semibold tabular-nums">{fmtBaht(s.pay.total)}</td>
-                  </tr>
-                ))}
+                {summary.slots.map((s) => {
+                  // Shift-hour pay for this slot = ฐาน − หักเวลาออก (capped at 0).
+                  // Same number that contributes to "ค่าชม.เวรนอกเวลา" on
+                  // TotalSummary — exposed per-row here for transparency.
+                  const shiftHourPay = Math.max(0, s.pay.base - s.pay.deduction);
+                  return (
+                    <tr key={`${s.date}|${s.slot}`} className="hover:bg-zinc-50">
+                      <td className="px-4 py-2 font-mono text-xs tabular-nums">{s.date}</td>
+                      <td className="px-4 py-2">
+                        {SLOT_LABEL[s.slot]}{" "}
+                        {s.pay.offHour ? (
+                          <span className="ml-1 text-[10px] text-rose-600">นอกเวลา</span>
+                        ) : (
+                          <span className="ml-1 text-[10px] text-zinc-400">ในเวลา</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums">{fmtBaht(s.pay.base)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-rose-600">
+                        {s.pay.deduction ? "−" + fmtBaht(s.pay.deduction) : "—"}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums">
+                        {shiftHourPay > 0
+                          ? <span className="font-semibold text-zinc-800">{fmtBaht(shiftHourPay)}</span>
+                          : <span className="text-zinc-300">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-emerald-700">
+                        {s.caseCount > 0
+                          ? <span className="whitespace-nowrap">{s.caseCount} × {caseRate.toLocaleString()} = {fmtBaht(s.pay.caseBonus)}</span>
+                          : <span className="text-zinc-300">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right font-semibold tabular-nums">{fmtBaht(s.pay.total)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
               {summary.slots.length > 0 && (
                 <tfoot className="bg-zinc-50 text-sm font-semibold">
                   <tr>
-                    <td colSpan={5} className="px-4 py-3 text-right text-zinc-600">รวมเดือน</td>
+                    <td colSpan={6} className="px-4 py-3 text-right text-zinc-600">รวมเดือน</td>
                     <td className="px-4 py-3 text-right tabular-nums text-violet-900">{fmtBaht(summary.total)}</td>
                   </tr>
                 </tfoot>
