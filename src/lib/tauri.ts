@@ -61,6 +61,7 @@ export interface ShiftBundle {
 export interface ExportPayload {
   yearMonth: string;
   savePath: string;
+  holidays: number[];          // day-of-month integers — same scoping as calc
   outHos: ShiftBundle | null;
   inHos: ShiftBundle | null;
 }

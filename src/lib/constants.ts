@@ -5,12 +5,8 @@
  *   1. Update both this file AND calc.rs in lockstep.
  *   2. Update the table in CLAUDE.md.
  *   3. Re-run fixture tests on both sides.
- *
- * Do not import these in code that runs in `calc.ts` if you can avoid it —
- * `calc.ts` uses its own local copies so test fixtures cover constant drift.
  */
-export const SHIFT_PAY_SOLO_8H = 780;
-export const SHIFT_PAY_CHAIN_16H = 760;
+export const OFF_HOUR_SHIFT_PAY = 780;
 export const CASE_BONUS_OUT_HOS = 1800;
 export const CASE_BONUS_IN_HOS = 1200;
 export const DEDUCT_PER_HALF_HOUR = 48.75;

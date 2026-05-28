@@ -5,12 +5,25 @@
 //!
 //! The TS mirror exists only so the UI can show a running total while the user
 //! types. Persisted totals always come from this Rust implementation.
+//!
+//! ## Pay model (v2 — post chain-detection)
+//!
+//! Each slot is evaluated independently:
+//!   1. `is_off_hour(date, slot, holidays)` decides base pay:
+//!        off-hour → 780 ฿
+//!        in-hour  → 0 ฿
+//!   2. Deduction applies only to off-hour base (in-hour base is already 0).
+//!   3. Case bonus is paid per case regardless of off/in hour.
+//!
+//! Off-hour is defined as (matches Shift_count CLAUDE.md):
+//!   - Night slot (00-08 or 16-24) on a non-holiday weekday, OR
+//!   - Any slot on a weekend (Sat/Sun), OR
+//!   - Any slot on a holiday.
 
 use serde::{Deserialize, Serialize};
 
 // ─── Constants — DO NOT change without going through CLAUDE.md guardrails ────
-pub const SHIFT_PAY_SOLO_8H: f64 = 780.0;
-pub const SHIFT_PAY_CHAIN_16H: f64 = 760.0;
+pub const OFF_HOUR_SHIFT_PAY: f64 = 780.0;
 pub const CASE_BONUS_OUT_HOS: f64 = 1800.0;
 pub const CASE_BONUS_IN_HOS: f64 = 1200.0;
 pub const DEDUCT_PER_HALF_HOUR: f64 = 48.75;
@@ -61,7 +74,25 @@ pub struct SlotPay {
     pub deduction: f64,
     pub case_bonus: f64,
     pub total: f64,
+    pub off_hour: bool,
     pub reason: String,
+}
+
+// ─── Off-hour rule (port of Shift_count's isOffHour) ────────────────────────
+
+/// `true` when the slot pays the off-hour rate (780 ฿).
+///
+/// `holidays` lists day-of-month integers for the *same* month as `date`
+/// — the caller must scope the list to the relevant month before calling.
+pub fn is_off_hour(date: &str, slot: Slot, holidays: &[u32]) -> bool {
+    use chrono::{Datelike, NaiveDate, Weekday};
+    let dt = NaiveDate::parse_from_str(date, "%Y-%m-%d").expect("invalid date");
+    let is_weekend = matches!(dt.weekday(), Weekday::Sat | Weekday::Sun);
+    let day = dt.day();
+    let is_holiday = holidays.contains(&day);
+    let is_night_slot = matches!(slot, Slot::S00_08 | Slot::S16_24);
+
+    (is_night_slot && !is_weekend && !is_holiday) || is_weekend || is_holiday
 }
 
 // ─── Internals ───────────────────────────────────────────────────────────────
@@ -96,72 +127,49 @@ pub fn case_minutes(leave: Option<&str>, ret: Option<&str>) -> i32 {
     diff
 }
 
-/// Add `days` to ISO `YYYY-MM-DD`. Returns the shifted date as `YYYY-MM-DD`.
-pub fn shift_date(date: &str, days: i32) -> String {
-    use chrono::NaiveDate;
-    let parsed = NaiveDate::parse_from_str(date, "%Y-%m-%d").expect("invalid date");
-    let shifted = parsed
-        .checked_add_signed(chrono::Duration::days(days as i64))
-        .expect("date overflow");
-    shifted.format("%Y-%m-%d").to_string()
-}
-
-/// `(prev_date, prev_slot)` and `(next_date, next_slot)` for chain detection.
-pub fn adjacent_slots(date: &str, slot: Slot) -> ((String, Slot), (String, Slot)) {
-    use Slot::*;
-    let prev = match slot {
-        S00_08 => (shift_date(date, -1), S16_24),
-        S08_16 => (date.to_owned(), S00_08),
-        S16_24 => (date.to_owned(), S08_16),
-    };
-    let next = match slot {
-        S00_08 => (date.to_owned(), S08_16),
-        S08_16 => (date.to_owned(), S16_24),
-        S16_24 => (shift_date(date, 1), S00_08),
-    };
-    (prev, next)
-}
-
-/// Per-slot pay. `lookup` returns the doctor assigned to (date, slot) in the
-/// same shift_type as `assignment` — chain detection is intra-type only.
-pub fn compute_slot_pay<F>(assignment: &Assignment, cases: &[ShiftCase], lookup: F) -> SlotPay
-where
-    F: Fn(&str, Slot) -> Option<String>,
-{
-    let Some(doctor) = &assignment.doctor_name else {
+/// Per-slot pay using the off-hour rule.
+///
+/// `holidays` is the day-of-month list for the SAME month as `assignment.date`.
+/// (Pre-filter at the boundary so this function stays simple — see calc-month.ts
+/// for the equivalent on the TS side.)
+pub fn compute_slot_pay(
+    assignment: &Assignment,
+    cases: &[ShiftCase],
+    holidays: &[u32],
+) -> SlotPay {
+    let Some(_doctor) = &assignment.doctor_name else {
         return SlotPay {
             base: 0.0,
             deduction: 0.0,
             case_bonus: 0.0,
             total: 0.0,
+            off_hour: false,
             reason: "ไม่มีแพทย์ในเวรนี้".into(),
         };
     };
 
-    let (prev, next) = adjacent_slots(&assignment.date, assignment.slot);
-    let chained = lookup(&prev.0, prev.1).as_deref() == Some(doctor)
-        || lookup(&next.0, next.1).as_deref() == Some(doctor);
-    let base = if chained {
-        SHIFT_PAY_CHAIN_16H
-    } else {
-        SHIFT_PAY_SOLO_8H
-    };
+    let off_hour = is_off_hour(&assignment.date, assignment.slot, holidays);
+    let base = if off_hour { OFF_HOUR_SHIFT_PAY } else { 0.0 };
 
     let is_out = matches!(assignment.shift_type, ShiftType::OutHos);
     let case_count = cases.len() as i32;
 
-    let (minutes_out, reason_detail) = if is_out {
-        let m: i32 = cases
-            .iter()
-            .map(|c| case_minutes(c.leave_time.as_deref(), c.return_time.as_deref()))
-            .sum();
-        (m, format!("{case_count} เคส, ออกรวม {m} นาที"))
+    // Deduction only computed for off-hour slots — in-hour base is 0 so any
+    // deduction would just stay capped at 0 anyway, and we avoid double-counting
+    // minutes_out when the user has cases on an in-hour slot too.
+    let (minutes_out, minutes_label) = if off_hour {
+        if is_out {
+            let m: i32 = cases
+                .iter()
+                .map(|c| case_minutes(c.leave_time.as_deref(), c.return_time.as_deref()))
+                .sum();
+            (m, format!("ออกรวม {m} นาที"))
+        } else {
+            let m = case_count * IN_HOS_MIN_PER_CASE;
+            (m, format!("{case_count}×{IN_HOS_MIN_PER_CASE}={m} นาที"))
+        }
     } else {
-        let m = case_count * IN_HOS_MIN_PER_CASE;
-        (
-            m,
-            format!("{case_count} เคส × {IN_HOS_MIN_PER_CASE} นาที = {m} นาที"),
-        )
+        (0, String::new())
     };
 
     let units = deduction_units(minutes_out);
@@ -175,18 +183,24 @@ where
         };
     let total = (base - capped_deduct) + case_bonus;
 
-    let chain_tag = if chained { "16ชม.chain" } else { "8ชม." };
-    let deduct_tag = if units > 0 {
-        format!(" → หัก {units}×{DEDUCT_PER_HALF_HOUR}")
-    } else {
-        String::new()
-    };
+    let tag = if off_hour { "นอกเวลา" } else { "ในเวลา" };
+    let pieces: Vec<String> = [
+        Some(tag.to_string()),
+        Some(format!("{case_count} เคส")),
+        (!minutes_label.is_empty()).then(|| minutes_label.clone()),
+        (units > 0).then(|| format!("หัก {units}×{DEDUCT_PER_HALF_HOUR}")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
     SlotPay {
         base,
         deduction: capped_deduct,
         case_bonus,
         total,
-        reason: format!("{chain_tag} · {reason_detail}{deduct_tag}"),
+        off_hour,
+        reason: pieces.join(" · "),
     }
 }
 
@@ -194,8 +208,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn empty_lookup(_d: &str, _s: Slot) -> Option<String> { None }
 
     fn assign(date: &str, slot: Slot, doc: Option<&str>, shift_type: ShiftType) -> Assignment {
         Assignment {
@@ -206,42 +218,80 @@ mod tests {
         }
     }
 
+    // 2026-05-12 is a Tuesday (weekday). 2026-05-16 is a Saturday.
+    const WEEKDAY: &str = "2026-05-12";
+    const SATURDAY: &str = "2026-05-16";
+
+    #[test]
+    fn off_hour_weekday_night_slots() {
+        assert!(is_off_hour(WEEKDAY, Slot::S00_08, &[]));
+        assert!(!is_off_hour(WEEKDAY, Slot::S08_16, &[]));
+        assert!(is_off_hour(WEEKDAY, Slot::S16_24, &[]));
+    }
+
+    #[test]
+    fn off_hour_weekend_all_slots() {
+        assert!(is_off_hour(SATURDAY, Slot::S00_08, &[]));
+        assert!(is_off_hour(SATURDAY, Slot::S08_16, &[]));
+        assert!(is_off_hour(SATURDAY, Slot::S16_24, &[]));
+    }
+
+    #[test]
+    fn off_hour_holiday_promotes_in_hour() {
+        // Weekday in-hour slot but with holiday flag → counts as off-hour
+        assert!(!is_off_hour(WEEKDAY, Slot::S08_16, &[]));
+        assert!(is_off_hour(WEEKDAY, Slot::S08_16, &[12]));
+    }
+
     #[test]
     fn no_doctor_returns_zero() {
-        let a = assign("2026-05-12", Slot::S08_16, None, ShiftType::OutHos);
-        let p = compute_slot_pay(&a, &[], empty_lookup);
+        let a = assign(WEEKDAY, Slot::S00_08, None, ShiftType::OutHos);
+        let p = compute_slot_pay(&a, &[], &[]);
         assert_eq!(p.total, 0.0);
         assert_eq!(p.base, 0.0);
     }
 
     #[test]
-    fn solo_8h_no_cases_pays_780() {
-        let a = assign("2026-05-12", Slot::S08_16, Some("อนิรุต"), ShiftType::OutHos);
-        let p = compute_slot_pay(&a, &[], empty_lookup);
-        assert_eq!(p.total, 780.0);
+    fn off_hour_no_cases_pays_780() {
+        let a = assign(WEEKDAY, Slot::S00_08, Some("อนิรุต"), ShiftType::OutHos);
+        let p = compute_slot_pay(&a, &[], &[]);
         assert_eq!(p.base, 780.0);
+        assert_eq!(p.total, 780.0);
+        assert!(p.off_hour);
     }
 
     #[test]
-    fn chain_detected_via_next_slot_pays_760() {
-        let a = assign("2026-05-12", Slot::S08_16, Some("อนิรุต"), ShiftType::OutHos);
-        let lookup = |d: &str, s: Slot| {
-            if d == "2026-05-12" && s == Slot::S16_24 { Some("อนิรุต".into()) } else { None }
-        };
-        let p = compute_slot_pay(&a, &[], lookup);
-        assert_eq!(p.base, 760.0);
-        assert_eq!(p.total, 760.0);
+    fn in_hour_weekday_pays_zero_base() {
+        let a = assign(WEEKDAY, Slot::S08_16, Some("อนิรุต"), ShiftType::OutHos);
+        let p = compute_slot_pay(&a, &[], &[]);
+        assert_eq!(p.base, 0.0);
+        assert_eq!(p.total, 0.0);
+        assert!(!p.off_hour);
     }
 
     #[test]
-    fn chain_across_midnight() {
-        // 16-24 on May 12 + 00-08 on May 13 = chain
-        let a = assign("2026-05-12", Slot::S16_24, Some("อนิรุต"), ShiftType::OutHos);
-        let lookup = |d: &str, s: Slot| {
-            if d == "2026-05-13" && s == Slot::S00_08 { Some("อนิรุต".into()) } else { None }
-        };
-        let p = compute_slot_pay(&a, &[], lookup);
-        assert_eq!(p.base, 760.0);
+    fn in_hour_with_cases_still_pays_bonus() {
+        // 3 cases on a weekday in-hour outHos slot:
+        //   base = 0, deduction = 0 (in-hour skips), bonus = 3 × 1800 = 5400
+        let a = assign(WEEKDAY, Slot::S08_16, Some("กนก"), ShiftType::OutHos);
+        let cases = vec![
+            ShiftCase { shift_type: ShiftType::OutHos, date: WEEKDAY.into(), slot: Slot::S08_16, leave_time: Some("13:00".into()), return_time: Some("13:25".into()) },
+            ShiftCase { shift_type: ShiftType::OutHos, date: WEEKDAY.into(), slot: Slot::S08_16, leave_time: Some("14:00".into()), return_time: Some("14:30".into()) },
+            ShiftCase { shift_type: ShiftType::OutHos, date: WEEKDAY.into(), slot: Slot::S08_16, leave_time: Some("15:00".into()), return_time: Some("15:20".into()) },
+        ];
+        let p = compute_slot_pay(&a, &cases, &[]);
+        assert_eq!(p.base, 0.0);
+        assert_eq!(p.deduction, 0.0); // no deduction on in-hour
+        assert_eq!(p.case_bonus, 5400.0);
+        assert_eq!(p.total, 5400.0);
+    }
+
+    #[test]
+    fn weekend_in_hour_promoted_pays_780() {
+        let a = assign(SATURDAY, Slot::S08_16, Some("อนิรุต"), ShiftType::OutHos);
+        let p = compute_slot_pay(&a, &[], &[]);
+        assert_eq!(p.base, 780.0);
+        assert!(p.off_hour);
     }
 
     #[test]
@@ -262,18 +312,17 @@ mod tests {
     }
 
     #[test]
-    fn out_hos_one_case_with_deduction() {
-        // Doctor out 13:00-13:25 = 25 min → 1 unit deduction × 48.75
-        // + 1 case bonus 1800 = base 780 - 48.75 + 1800 = 2531.25
-        let a = assign("2026-05-12", Slot::S08_16, Some("อนิรุต"), ShiftType::OutHos);
+    fn out_hos_off_hour_with_deduction() {
+        // Weekday 16-24 (off-hour), 1 case 25min out → base 780 − 48.75 + 1800
+        let a = assign(WEEKDAY, Slot::S16_24, Some("อนิรุต"), ShiftType::OutHos);
         let cases = vec![ShiftCase {
             shift_type: ShiftType::OutHos,
-            date: "2026-05-12".into(),
-            slot: Slot::S08_16,
-            leave_time: Some("13:00".into()),
-            return_time: Some("13:25".into()),
+            date: WEEKDAY.into(),
+            slot: Slot::S16_24,
+            leave_time: Some("18:00".into()),
+            return_time: Some("18:25".into()),
         }];
-        let p = compute_slot_pay(&a, &cases, empty_lookup);
+        let p = compute_slot_pay(&a, &cases, &[]);
         assert_eq!(p.base, 780.0);
         assert_eq!(p.deduction, 48.75);
         assert_eq!(p.case_bonus, 1800.0);
@@ -281,20 +330,19 @@ mod tests {
     }
 
     #[test]
-    fn in_hos_three_cases_30min_virtual_one_unit() {
-        // 3 cases × 10 = 30 min → still within 5-34 range → 1 unit deduction
-        // + 3 case bonus 1200 = 780 - 48.75 + 3600 = 4331.25
-        let a = assign("2026-05-12", Slot::S08_16, Some("กนก"), ShiftType::InHos);
+    fn in_hos_off_hour_three_cases_30min_virtual() {
+        // Weekend 08-16 (off-hour), 3 inHos cases × 10 = 30min → 1 unit deduct
+        let a = assign(SATURDAY, Slot::S08_16, Some("กนก"), ShiftType::InHos);
         let cases: Vec<_> = (0..3)
             .map(|_| ShiftCase {
                 shift_type: ShiftType::InHos,
-                date: "2026-05-12".into(),
+                date: SATURDAY.into(),
                 slot: Slot::S08_16,
                 leave_time: None,
                 return_time: None,
             })
             .collect();
-        let p = compute_slot_pay(&a, &cases, empty_lookup);
+        let p = compute_slot_pay(&a, &cases, &[]);
         assert_eq!(p.base, 780.0);
         assert_eq!(p.deduction, 48.75);
         assert_eq!(p.case_bonus, 3600.0);
@@ -302,29 +350,26 @@ mod tests {
     }
 
     #[test]
-    fn cross_midnight_case_duration() {
-        // 23:30 → 00:15 = 45 min
-        assert_eq!(case_minutes(Some("23:30"), Some("00:15")), 45);
-    }
-
-    #[test]
     fn deduction_capped_at_base_pay() {
-        // 30 cases × 10 = 300 min = 10 units × 48.75 = 487.50 > base 780
-        // 100 cases × 10 = 1000 min = 34 units × 48.75 = 1657.50, capped at base 780
-        // base goes to 0, case_bonus = 100 × 1200 = 120,000
-        let a = assign("2026-05-12", Slot::S08_16, Some("กนก"), ShiftType::InHos);
+        // Off-hour, 100 inHos cases × 10 = 1000min → many units → capped at 780
+        let a = assign(WEEKDAY, Slot::S00_08, Some("กนก"), ShiftType::InHos);
         let cases: Vec<_> = (0..100)
             .map(|_| ShiftCase {
                 shift_type: ShiftType::InHos,
-                date: "2026-05-12".into(),
-                slot: Slot::S08_16,
+                date: WEEKDAY.into(),
+                slot: Slot::S00_08,
                 leave_time: None,
                 return_time: None,
             })
             .collect();
-        let p = compute_slot_pay(&a, &cases, empty_lookup);
-        assert_eq!(p.deduction, 780.0); // capped
+        let p = compute_slot_pay(&a, &cases, &[]);
+        assert_eq!(p.deduction, 780.0);
         assert_eq!(p.case_bonus, 120_000.0);
         assert_eq!(p.total, 120_000.0);
+    }
+
+    #[test]
+    fn cross_midnight_case_duration() {
+        assert_eq!(case_minutes(Some("23:30"), Some("00:15")), 45);
     }
 }

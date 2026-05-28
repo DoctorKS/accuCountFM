@@ -181,6 +181,40 @@ export async function deleteCase(id: number): Promise<void> {
   await (await db()).execute(`DELETE FROM shift_cases WHERE id = $1`, [id]);
 }
 
+// ─── Holidays ───────────────────────────────────────────────────────────────
+
+export interface HolidayRow {
+  year_month: string;
+  day: number;
+  note: string | null;
+  updated_at: string;
+}
+
+/** Days flagged as holidays for the given `year_month`. */
+export async function listMonthHolidays(yearMonth: string): Promise<HolidayRow[]> {
+  return (await db()).select<HolidayRow[]>(
+    `SELECT * FROM holidays WHERE year_month = $1 ORDER BY day`,
+    [yearMonth],
+  );
+}
+
+export async function addHoliday(yearMonth: string, day: number, note?: string | null): Promise<void> {
+  await (await db()).execute(
+    `INSERT INTO holidays (year_month, day, note, updated_at)
+     VALUES ($1, $2, $3, datetime('now'))
+     ON CONFLICT(year_month, day) DO UPDATE SET
+       note = excluded.note, updated_at = excluded.updated_at`,
+    [yearMonth, day, note ?? null],
+  );
+}
+
+export async function removeHoliday(yearMonth: string, day: number): Promise<void> {
+  await (await db()).execute(
+    `DELETE FROM holidays WHERE year_month = $1 AND day = $2`,
+    [yearMonth, day],
+  );
+}
+
 // ─── Settings ───────────────────────────────────────────────────────────────
 
 export async function getSetting(key: string): Promise<string | null> {

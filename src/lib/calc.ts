@@ -1,23 +1,24 @@
 /**
  * Live-preview calc — MUST stay byte-for-byte equivalent to `src-tauri/src/calc.rs`.
  *
- * Shared test fixtures live at `tests/calc-fixtures.json`. Both Rust and TS
- * suites load them. If you change anything here, you MUST also change calc.rs
- * and re-run both test suites.
- *
  * The Rust side is the source of truth at save time — this TS copy exists
- * only so the UI can show a running total as the user types.
+ * only so the UI can show a running total as the user types. Both sides load
+ * the same fixtures from `tests/calc.test.ts` / Rust unit tests.
+ *
+ * v2 pay model (post chain-detection):
+ *   - Each slot evaluated independently via `isOffHour(date, slot, holidays)`
+ *   - Off-hour slot → base 780 ฿; in-hour → base 0
+ *   - Deduction applies only to off-hour base
+ *   - Case bonus paid per case regardless of off/in hour
  */
 import type { Slot, ShiftType } from "./constants";
 import {
-  SHIFT_PAY_SOLO_8H,
-  SHIFT_PAY_CHAIN_16H,
+  OFF_HOUR_SHIFT_PAY,
   CASE_BONUS_OUT_HOS,
   CASE_BONUS_IN_HOS,
   DEDUCT_PER_HALF_HOUR,
   IN_HOS_MIN_PER_CASE,
   GRACE_MIN,
-  SLOTS,
 } from "./constants";
 
 export interface Assignment {
@@ -36,11 +37,29 @@ export interface ShiftCase {
 }
 
 export interface SlotPay {
-  base: number;          // 780 | 760 | 0
-  deduction: number;     // ≥ 0
+  base: number;          // 780 (off-hour) | 0 (in-hour)
+  deduction: number;     // ≥ 0, capped at base
   caseBonus: number;     // ≥ 0
-  total: number;         // max(0, base - deduction) + caseBonus
+  total: number;         // (base − deduction) + caseBonus
+  offHour: boolean;
   reason: string;        // human-readable for breakdown UI
+}
+
+/**
+ * `true` when the slot pays the off-hour rate (780 ฿).
+ *
+ * `holidays` is the day-of-month list for the SAME month as `date`.
+ */
+export function isOffHour(date: string, slot: Slot, holidays: number[]): boolean {
+  // Parse as UTC to avoid local-timezone Sat/Sun drift on dates near midnight.
+  const dt = new Date(date + "T00:00:00Z");
+  const dow = dt.getUTCDay();                    // 0=Sun..6=Sat
+  const isWeekend = dow === 0 || dow === 6;
+  const day = dt.getUTCDate();
+  const isHoliday = holidays.includes(day);
+  const isNightSlot = slot === "0000-0800" || slot === "1600-2400";
+
+  return (isNightSlot && !isWeekend && !isHoliday) || isWeekend || isHoliday;
 }
 
 /** Returns half-hour deduction units; 0 if minutes_out ≤ GRACE_MIN. */
@@ -69,53 +88,36 @@ export function caseMinutes(leave: string | null, ret: string | null): number {
 }
 
 /**
- * Returns the immediately-preceding (slot, date) and immediately-following
- * (slot, date) for chain detection. Crosses date boundary for 00-08 prev
- * and 16-24 next.
+ * Per-slot pay. `holidays` is the day-of-month list for the SAME month as
+ * `assignment.date` — caller is responsible for pre-filtering.
  */
-export function adjacentSlots(date: string, slot: Slot): { prev: [string, Slot]; next: [string, Slot] } {
-  const idx = SLOTS.indexOf(slot);
-  const prevDay = (d: string) => {
-    const dt = new Date(d + "T00:00:00Z");
-    dt.setUTCDate(dt.getUTCDate() - 1);
-    return dt.toISOString().slice(0, 10);
-  };
-  const nextDay = (d: string) => {
-    const dt = new Date(d + "T00:00:00Z");
-    dt.setUTCDate(dt.getUTCDate() + 1);
-    return dt.toISOString().slice(0, 10);
-  };
-  const prev: [string, Slot] = idx === 0 ? [prevDay(date), SLOTS[2]] : [date, SLOTS[idx - 1]];
-  const next: [string, Slot] = idx === 2 ? [nextDay(date), SLOTS[0]] : [date, SLOTS[idx + 1]];
-  return { prev, next };
-}
-
-/** Per-slot pay. `lookup` is a getter for the doctor assigned to (date, slot) in the same shift_type. */
 export function computeSlotPay(
   assignment: Assignment,
   cases: ShiftCase[],
-  lookup: (date: string, slot: Slot) => string | null,
+  holidays: number[],
 ): SlotPay {
   if (!assignment.doctorName) {
-    return { base: 0, deduction: 0, caseBonus: 0, total: 0, reason: "ไม่มีแพทย์ในเวรนี้" };
+    return { base: 0, deduction: 0, caseBonus: 0, total: 0, offHour: false, reason: "ไม่มีแพทย์ในเวรนี้" };
   }
-  const { prev, next } = adjacentSlots(assignment.date, assignment.slot);
-  const chained =
-    lookup(prev[0], prev[1]) === assignment.doctorName ||
-    lookup(next[0], next[1]) === assignment.doctorName;
-  const base = chained ? SHIFT_PAY_CHAIN_16H : SHIFT_PAY_SOLO_8H;
+
+  const offHour = isOffHour(assignment.date, assignment.slot, holidays);
+  const base = offHour ? OFF_HOUR_SHIFT_PAY : 0;
 
   const isOut = assignment.shiftType === "outHos";
   const caseCount = cases.length;
 
-  let minutesOut: number;
-  let reason: string;
-  if (isOut) {
-    minutesOut = cases.reduce((sum, c) => sum + caseMinutes(c.leaveTime, c.returnTime), 0);
-    reason = `${caseCount} เคส, ออกรวม ${minutesOut} นาที`;
-  } else {
-    minutesOut = caseCount * IN_HOS_MIN_PER_CASE;
-    reason = `${caseCount} เคส × ${IN_HOS_MIN_PER_CASE} นาที = ${minutesOut} นาที`;
+  // Deduction only computed for off-hour slots — in-hour base is 0 so any
+  // deduction would just stay capped at 0 anyway.
+  let minutesOut = 0;
+  let minutesLabel = "";
+  if (offHour) {
+    if (isOut) {
+      minutesOut = cases.reduce((sum, c) => sum + caseMinutes(c.leaveTime, c.returnTime), 0);
+      minutesLabel = `ออกรวม ${minutesOut} นาที`;
+    } else {
+      minutesOut = caseCount * IN_HOS_MIN_PER_CASE;
+      minutesLabel = `${caseCount}×${IN_HOS_MIN_PER_CASE}=${minutesOut} นาที`;
+    }
   }
 
   const units = deductionUnits(minutesOut);
@@ -124,11 +126,13 @@ export function computeSlotPay(
   const caseBonus = caseCount * (isOut ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS);
   const total = (base - cappedDeduct) + caseBonus;
 
-  return {
-    base,
-    deduction: cappedDeduct,
-    caseBonus,
-    total,
-    reason: `${chained ? "16ชม.chain" : "8ชม."} · ${reason}${units ? ` → หัก ${units}×${DEDUCT_PER_HALF_HOUR}` : ""}`,
-  };
+  const tag = offHour ? "นอกเวลา" : "ในเวลา";
+  const pieces = [
+    tag,
+    `${caseCount} เคส`,
+    minutesLabel,
+    units > 0 ? `หัก ${units}×${DEDUCT_PER_HALF_HOUR}` : "",
+  ].filter(Boolean);
+
+  return { base, deduction: cappedDeduct, caseBonus, total, offHour, reason: pieces.join(" · ") };
 }

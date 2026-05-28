@@ -58,9 +58,11 @@ export function TotalSummary({ mode }: { mode: Mode }) {
         setExporting(false);
         return;
       }
+      const holidays = (outMonth.data?.holidays ?? inMonth.data?.holidays ?? []) as number[];
       const result = await exportMonthXlsx({
         yearMonth: ym,
         savePath,
+        holidays,
         outHos: showOut && outMonth.data
           ? toBundle("outHos", outMonth.data.assignments, outMonth.data.cases)
           : null,
@@ -79,12 +81,12 @@ export function TotalSummary({ mode }: { mode: Mode }) {
     const out = Object.fromEntries(DOCTORS.map((d) => [d, 0])) as unknown as Record<Doctor, number>;
     const inn = Object.fromEntries(DOCTORS.map((d) => [d, 0])) as unknown as Record<Doctor, number>;
     if (outMonth.data) {
-      for (const s of computeMonthByDoctor("outHos", outMonth.data.assignments, outMonth.data.cases)) {
+      for (const s of computeMonthByDoctor("outHos", outMonth.data.assignments, outMonth.data.cases, outMonth.data.holidays)) {
         out[s.doctor] = s.total;
       }
     }
     if (inMonth.data) {
-      for (const s of computeMonthByDoctor("inHos", inMonth.data.assignments, inMonth.data.cases)) {
+      for (const s of computeMonthByDoctor("inHos", inMonth.data.assignments, inMonth.data.cases, inMonth.data.holidays)) {
         inn[s.doctor] = s.total;
       }
     }

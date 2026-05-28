@@ -19,7 +19,7 @@ export function DoctorBreakdownPage() {
   const month = useMonth(shiftType, ym ?? "");
   const summary = useMemo(() => {
     if (!month.data || !valid) return null;
-    return computeMonthByDoctor(shiftType, month.data.assignments, month.data.cases)
+    return computeMonthByDoctor(shiftType, month.data.assignments, month.data.cases, month.data.holidays)
       .find((s) => s.doctor === doctorName) ?? null;
   }, [month.data, shiftType, valid, doctorName]);
 

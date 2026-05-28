@@ -22,7 +22,7 @@ export function ShiftDayPage() {
   const month = useMonth(shiftType, ym);
   const day = useMemo(() => {
     if (!month.data || !date) return null;
-    return computeDay(shiftType, date, month.data.assignments, month.data.cases);
+    return computeDay(shiftType, date, month.data.assignments, month.data.cases, month.data.holidays);
   }, [month.data, shiftType, date]);
 
   return (

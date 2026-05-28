@@ -2,8 +2,8 @@
  * Month-level aggregation built on top of `lib/calc.ts`.
  *
  * Pure functions — no DB, no IPC. Caller fetches rows from `lib/db.ts` and
- * passes them in. Returned shapes feed straight into the dashboard cards
- * and breakdown table.
+ * passes them in (incl. holidays for the month). Returned shapes feed
+ * straight into the dashboard cards and breakdown table.
  */
 import type { AssignmentRow, CaseRow } from "./db";
 import type { ShiftType, Slot } from "./constants";
@@ -26,13 +26,6 @@ export interface DoctorMonthSummary {
   slots: SlotComputed[];
 }
 
-/** Build a fast lookup: `${date}|${slot}` → doctorName, intra-shift-type. */
-function buildLookup(assignments: AssignmentRow[]): (d: string, s: Slot) => string | null {
-  const map = new Map<string, string | null>();
-  for (const a of assignments) map.set(`${a.date}|${a.slot}`, a.doctor_name);
-  return (d, s) => map.get(`${d}|${s}`) ?? null;
-}
-
 /**
  * Compute every slot in `assignments` and group by doctor.
  *
@@ -43,8 +36,8 @@ export function computeMonthByDoctor(
   shiftType: ShiftType,
   assignments: AssignmentRow[],
   cases: CaseRow[],
+  holidays: number[],
 ): DoctorMonthSummary[] {
-  const lookup = buildLookup(assignments);
   const byKey = new Map<string, CaseRow[]>();
   for (const c of cases) {
     const k = `${c.date}|${c.slot}`;
@@ -73,7 +66,7 @@ export function computeMonthByDoctor(
       leaveTime: c.leave_time,
       returnTime: c.return_time,
     }));
-    const pay = computeSlotPay(assignment, casesForCalc, lookup);
+    const pay = computeSlotPay(assignment, casesForCalc, holidays);
     const entry = byDoctor[a.doctor_name];
     entry.total += pay.total;
     entry.slots.push({
@@ -101,8 +94,8 @@ export function computeDay(
   date: string,
   monthAssignments: AssignmentRow[],
   monthCases: CaseRow[],
+  holidays: number[],
 ): DayComputed {
-  const lookup = buildLookup(monthAssignments);
   const slots: Record<Slot, SlotComputed | null> = {
     "0000-0800": null,
     "0800-1600": null,
@@ -119,7 +112,7 @@ export function computeDay(
     const pay = computeSlotPay(
       { shiftType, date, slot, doctorName: a.doctor_name },
       cs.map((c) => ({ shiftType, date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time })),
-      lookup,
+      holidays,
     );
     slots[slot] = {
       date,

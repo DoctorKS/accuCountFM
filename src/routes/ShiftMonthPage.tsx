@@ -21,7 +21,7 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
 
   const summary = useMemo(() => {
     if (!month.data) return null;
-    return computeMonthByDoctor(shiftType, month.data.assignments, month.data.cases);
+    return computeMonthByDoctor(shiftType, month.data.assignments, month.data.cases, month.data.holidays);
   }, [month.data, shiftType]);
 
   // Day-status hint for the calendar grid: red dot if all 3 slots assigned;

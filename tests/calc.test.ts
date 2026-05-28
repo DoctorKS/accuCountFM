@@ -2,14 +2,13 @@ import { describe, it, expect } from "vitest";
 import {
   deductionUnits,
   caseMinutes,
-  adjacentSlots,
+  isOffHour,
   computeSlotPay,
   type Assignment,
   type ShiftCase,
 } from "@/lib/calc";
 import {
-  SHIFT_PAY_SOLO_8H,
-  SHIFT_PAY_CHAIN_16H,
+  OFF_HOUR_SHIFT_PAY,
   CASE_BONUS_OUT_HOS,
   CASE_BONUS_IN_HOS,
   DEDUCT_PER_HALF_HOUR,
@@ -17,15 +16,34 @@ import {
 } from "@/lib/constants";
 
 /**
- * Mirror of `src-tauri/src/calc.rs` tests. If a test name here matches one on
- * the Rust side, the expected value MUST agree exactly — these are the same
- * business rules expressed in two languages.
+ * Mirror of `src-tauri/src/calc.rs` tests. Same fixtures, same expected values.
+ * If a name matches the Rust side, the expected value MUST agree.
  */
-const emptyLookup = () => null;
 
-function makeAssignment(date: string, slot: Slot, doctor: string | null, type: "outHos" | "inHos"): Assignment {
+// 2026-05-12 is a Tuesday. 2026-05-16 is a Saturday.
+const WEEKDAY = "2026-05-12";
+const SATURDAY = "2026-05-16";
+
+function assign(date: string, slot: Slot, doctor: string | null, type: "outHos" | "inHos"): Assignment {
   return { shiftType: type, date, slot, doctorName: doctor };
 }
+
+describe("isOffHour", () => {
+  it("weekday night slots = off-hour", () => {
+    expect(isOffHour(WEEKDAY, "0000-0800", [])).toBe(true);
+    expect(isOffHour(WEEKDAY, "0800-1600", [])).toBe(false);
+    expect(isOffHour(WEEKDAY, "1600-2400", [])).toBe(true);
+  });
+  it("weekend all slots = off-hour", () => {
+    expect(isOffHour(SATURDAY, "0000-0800", [])).toBe(true);
+    expect(isOffHour(SATURDAY, "0800-1600", [])).toBe(true);
+    expect(isOffHour(SATURDAY, "1600-2400", [])).toBe(true);
+  });
+  it("holiday promotes weekday in-hour to off-hour", () => {
+    expect(isOffHour(WEEKDAY, "0800-1600", [])).toBe(false);
+    expect(isOffHour(WEEKDAY, "0800-1600", [12])).toBe(true);
+  });
+});
 
 describe("deductionUnits", () => {
   it("0 to 4 minutes = no deduction (grace)", () => {
@@ -60,86 +78,93 @@ describe("caseMinutes", () => {
   });
 });
 
-describe("adjacentSlots", () => {
-  it("00-08 prev crosses to prev day's 16-24", () => {
-    const { prev } = adjacentSlots("2026-05-12", "0000-0800");
-    expect(prev).toEqual(["2026-05-11", "1600-2400"]);
-  });
-  it("16-24 next crosses to next day's 00-08", () => {
-    const { next } = adjacentSlots("2026-05-12", "1600-2400");
-    expect(next).toEqual(["2026-05-13", "0000-0800"]);
-  });
-  it("middle slot prev/next stay in same date", () => {
-    const { prev, next } = adjacentSlots("2026-05-12", "0800-1600");
-    expect(prev).toEqual(["2026-05-12", "0000-0800"]);
-    expect(next).toEqual(["2026-05-12", "1600-2400"]);
-  });
-});
-
 describe("computeSlotPay", () => {
   it("no doctor → 0 total", () => {
-    const a = makeAssignment("2026-05-12", "0800-1600", null, "outHos");
-    expect(computeSlotPay(a, [], emptyLookup).total).toBe(0);
+    const a = assign(WEEKDAY, "0000-0800", null, "outHos");
+    expect(computeSlotPay(a, [], []).total).toBe(0);
   });
 
-  it("solo 8h no cases pays 780", () => {
-    const a = makeAssignment("2026-05-12", "0800-1600", "อนิรุต", "outHos");
-    const p = computeSlotPay(a, [], emptyLookup);
-    expect(p.base).toBe(SHIFT_PAY_SOLO_8H);
+  it("off-hour no cases pays 780", () => {
+    const a = assign(WEEKDAY, "0000-0800", "อนิรุต", "outHos");
+    const p = computeSlotPay(a, [], []);
+    expect(p.base).toBe(OFF_HOUR_SHIFT_PAY);
     expect(p.total).toBe(780);
+    expect(p.offHour).toBe(true);
   });
 
-  it("chain via next slot pays 760", () => {
-    const a = makeAssignment("2026-05-12", "0800-1600", "อนิรุต", "outHos");
-    const p = computeSlotPay(a, [], (_d, s) => (s === "1600-2400" ? "อนิรุต" : null));
-    expect(p.base).toBe(SHIFT_PAY_CHAIN_16H);
+  it("in-hour weekday pays 0 base", () => {
+    const a = assign(WEEKDAY, "0800-1600", "อนิรุต", "outHos");
+    const p = computeSlotPay(a, [], []);
+    expect(p.base).toBe(0);
+    expect(p.total).toBe(0);
+    expect(p.offHour).toBe(false);
   });
 
-  it("chain across midnight (16-24 + 00-08 next day)", () => {
-    const a = makeAssignment("2026-05-12", "1600-2400", "อนิรุต", "outHos");
-    const p = computeSlotPay(a, [], (d, s) =>
-      d === "2026-05-13" && s === "0000-0800" ? "อนิรุต" : null,
-    );
-    expect(p.base).toBe(SHIFT_PAY_CHAIN_16H);
-  });
-
-  it("outHos one case 25min: 780 - 48.75 + 1800 = 2531.25", () => {
-    const a = makeAssignment("2026-05-12", "0800-1600", "อนิรุต", "outHos");
+  it("in-hour with cases still pays bonus, no deduction", () => {
+    const a = assign(WEEKDAY, "0800-1600", "กนก", "outHos");
     const cases: ShiftCase[] = [
-      { shiftType: "outHos", date: "2026-05-12", slot: "0800-1600", leaveTime: "13:00", returnTime: "13:25" },
+      { shiftType: "outHos", date: WEEKDAY, slot: "0800-1600", leaveTime: "13:00", returnTime: "13:25" },
+      { shiftType: "outHos", date: WEEKDAY, slot: "0800-1600", leaveTime: "14:00", returnTime: "14:30" },
+      { shiftType: "outHos", date: WEEKDAY, slot: "0800-1600", leaveTime: "15:00", returnTime: "15:20" },
     ];
-    const p = computeSlotPay(a, cases, emptyLookup);
+    const p = computeSlotPay(a, cases, []);
+    expect(p.base).toBe(0);
+    expect(p.deduction).toBe(0);
+    expect(p.caseBonus).toBe(3 * CASE_BONUS_OUT_HOS);
+    expect(p.total).toBe(3 * CASE_BONUS_OUT_HOS);
+  });
+
+  it("weekend in-hour slot promoted to off-hour (780 base)", () => {
+    const a = assign(SATURDAY, "0800-1600", "อนิรุต", "outHos");
+    const p = computeSlotPay(a, [], []);
+    expect(p.base).toBe(780);
+    expect(p.offHour).toBe(true);
+  });
+
+  it("holiday promotes weekday in-hour to off-hour", () => {
+    const a = assign(WEEKDAY, "0800-1600", "อนิรุต", "outHos");
+    const p = computeSlotPay(a, [], [12]);
+    expect(p.base).toBe(780);
+    expect(p.offHour).toBe(true);
+  });
+
+  it("outHos off-hour 25min case: 780 − 48.75 + 1800", () => {
+    const a = assign(WEEKDAY, "1600-2400", "อนิรุต", "outHos");
+    const cases: ShiftCase[] = [
+      { shiftType: "outHos", date: WEEKDAY, slot: "1600-2400", leaveTime: "18:00", returnTime: "18:25" },
+    ];
+    const p = computeSlotPay(a, cases, []);
     expect(p.deduction).toBeCloseTo(DEDUCT_PER_HALF_HOUR);
     expect(p.caseBonus).toBe(CASE_BONUS_OUT_HOS);
     expect(p.total).toBeCloseTo(780 - DEDUCT_PER_HALF_HOUR + CASE_BONUS_OUT_HOS);
   });
 
-  it("inHos 3 cases × 10min virtual: 780 - 48.75 + 3600 = 4331.25", () => {
-    const a = makeAssignment("2026-05-12", "0800-1600", "กนก", "inHos");
+  it("inHos off-hour 3 cases × 10min virtual: 780 − 48.75 + 3600", () => {
+    const a = assign(SATURDAY, "0800-1600", "กนก", "inHos");
     const cases: ShiftCase[] = Array.from({ length: 3 }, () => ({
       shiftType: "inHos" as const,
-      date: "2026-05-12",
+      date: SATURDAY,
       slot: "0800-1600" as const,
       leaveTime: null,
       returnTime: null,
     }));
-    const p = computeSlotPay(a, cases, emptyLookup);
+    const p = computeSlotPay(a, cases, []);
     expect(p.deduction).toBeCloseTo(DEDUCT_PER_HALF_HOUR);
     expect(p.caseBonus).toBe(3 * CASE_BONUS_IN_HOS);
     expect(p.total).toBeCloseTo(780 - DEDUCT_PER_HALF_HOUR + 3 * CASE_BONUS_IN_HOS);
   });
 
   it("deduction capped at base; case bonus still paid", () => {
-    const a = makeAssignment("2026-05-12", "0800-1600", "กนก", "inHos");
+    const a = assign(WEEKDAY, "0000-0800", "กนก", "inHos");
     const cases: ShiftCase[] = Array.from({ length: 100 }, () => ({
       shiftType: "inHos" as const,
-      date: "2026-05-12",
-      slot: "0800-1600" as const,
+      date: WEEKDAY,
+      slot: "0000-0800" as const,
       leaveTime: null,
       returnTime: null,
     }));
-    const p = computeSlotPay(a, cases, emptyLookup);
-    expect(p.deduction).toBe(SHIFT_PAY_SOLO_8H); // capped at base
+    const p = computeSlotPay(a, cases, []);
+    expect(p.deduction).toBe(OFF_HOUR_SHIFT_PAY);
     expect(p.caseBonus).toBe(100 * CASE_BONUS_IN_HOS);
     expect(p.total).toBe(100 * CASE_BONUS_IN_HOS);
   });

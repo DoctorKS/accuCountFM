@@ -3,8 +3,8 @@
  *
  * Query keys form a hierarchy so invalidation can be coarse (whole month)
  * or fine (one slot). Convention:
- *   ['month', shiftType, ym]              → assignments + cases for that month
- *   ['day', shiftType, date]              → single day (slice of month)
+ *   ['month', shiftType, ym]              → assignments + cases + holidays
+ *   ['holidays', ym]                      → standalone holiday list (cross shift_type)
  *   ['slot-cases', shiftType, date, slot] → individual slot cases (rarely used standalone)
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,8 +16,12 @@ import {
   addCase,
   updateCase,
   deleteCase,
+  listMonthHolidays,
+  addHoliday,
+  removeHoliday,
   type AssignmentRow,
   type CaseRow,
+  type HolidayRow,
 } from "@/lib/db";
 import type { ShiftType, Slot } from "@/lib/constants";
 import type { Doctor } from "@/lib/doctors";
@@ -27,18 +31,28 @@ import type { Doctor } from "@/lib/doctors";
 export interface MonthData {
   assignments: AssignmentRow[];
   cases: CaseRow[];
+  holidays: number[];           // day-of-month integers — calc-month consumes this directly
 }
 
 export function useMonth(shiftType: ShiftType, yearMonth: string) {
   return useQuery<MonthData>({
     queryKey: ["month", shiftType, yearMonth],
     queryFn: async () => {
-      const [assignments, cases] = await Promise.all([
+      const [assignments, cases, holidayRows] = await Promise.all([
         listMonthAssignments(shiftType, yearMonth),
         listMonthCases(shiftType, yearMonth),
+        listMonthHolidays(yearMonth),
       ]);
-      return { assignments, cases };
+      return { assignments, cases, holidays: holidayRows.map((h) => h.day) };
     },
+  });
+}
+
+/** Standalone holiday query — used by ShiftMonthPage's holiday picker. */
+export function useHolidays(yearMonth: string) {
+  return useQuery<HolidayRow[]>({
+    queryKey: ["holidays", yearMonth],
+    queryFn: () => listMonthHolidays(yearMonth),
   });
 }
 
@@ -99,6 +113,33 @@ export function useDeleteCase() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["month"] });
       qc.invalidateQueries({ queryKey: ["slot-cases"] });
+    },
+  });
+}
+
+export function useAddHoliday() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ yearMonth, day, note }: { yearMonth: string; day: number; note?: string }) =>
+      addHoliday(yearMonth, day, note),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["holidays", vars.yearMonth] });
+      // Holidays affect off-hour status across BOTH shift types → invalidate broadly
+      qc.invalidateQueries({ queryKey: ["month", "outHos", vars.yearMonth] });
+      qc.invalidateQueries({ queryKey: ["month", "inHos", vars.yearMonth] });
+    },
+  });
+}
+
+export function useRemoveHoliday() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ yearMonth, day }: { yearMonth: string; day: number }) =>
+      removeHoliday(yearMonth, day),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["holidays", vars.yearMonth] });
+      qc.invalidateQueries({ queryKey: ["month", "outHos", vars.yearMonth] });
+      qc.invalidateQueries({ queryKey: ["month", "inHos", vars.yearMonth] });
     },
   });
 }

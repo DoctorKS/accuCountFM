@@ -10,7 +10,7 @@
 //! canonical source of truth, so the spreadsheet always agrees with the UI
 //! (which uses calc.ts, kept in lockstep via fixture tests).
 
-use crate::calc::{compute_slot_pay, Assignment, ShiftCase, ShiftType, Slot, case_minutes};
+use crate::calc::{compute_slot_pay, case_minutes, Assignment, ShiftCase, ShiftType, Slot};
 use rust_xlsxwriter::{Color, Format, FormatAlign, FormatBorder, Workbook};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -28,6 +28,8 @@ pub struct ShiftBundle {
 pub struct ExportPayload {
     pub year_month: String,
     pub save_path: String,
+    #[serde(default)]
+    pub holidays: Vec<u32>,
     pub out_hos: Option<ShiftBundle>,
     pub in_hos: Option<ShiftBundle>,
 }
@@ -64,18 +66,9 @@ fn shift_type_str(t: ShiftType) -> &'static str {
     }
 }
 
-fn build_lookup(bundle: &ShiftBundle) -> HashMap<(String, Slot), String> {
-    let mut m = HashMap::new();
-    for a in &bundle.assignments {
-        if let Some(d) = &a.doctor_name {
-            m.insert((a.date.clone(), a.slot), d.clone());
-        }
-    }
-    m
-}
-
 pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
     let mut wb = Workbook::new();
+    let holidays: &[u32] = &payload.holidays;
 
     let header_fmt = Format::new()
         .set_bold()
@@ -89,7 +82,7 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
 
     // ─── Sheet 1: assignments ───────────────────────────────────────────────
     let sh1 = wb.add_worksheet().set_name("ตารางเวร").map_err(|e| e.to_string())?;
-    let h1 = ["วันที่", "ช่วงเวลา", "ประเภท", "แพทย์"];
+    let h1 = ["วันที่", "ช่วงเวลา", "ประเภท", "แพทย์", "นอกเวลา?"];
     for (c, label) in h1.iter().enumerate() {
         sh1.write_with_format(0, c as u16, *label, &header_fmt).map_err(|e| e.to_string())?;
     }
@@ -98,10 +91,12 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
         let mut sorted = bundle.assignments.iter().collect::<Vec<_>>();
         sorted.sort_by(|a, b| a.date.cmp(&b.date).then(slot_str(a.slot).cmp(slot_str(b.slot))));
         for a in sorted {
+            let off = crate::calc::is_off_hour(&a.date, a.slot, holidays);
             sh1.write_with_format(row, 0, &a.date, &center).map_err(|e| e.to_string())?;
             sh1.write_with_format(row, 1, slot_str(a.slot), &center).map_err(|e| e.to_string())?;
             sh1.write_with_format(row, 2, shift_type_str(a.shift_type), &center).map_err(|e| e.to_string())?;
             sh1.write_string(row, 3, a.doctor_name.as_deref().unwrap_or("")).map_err(|e| e.to_string())?;
+            sh1.write_with_format(row, 4, if off { "✓" } else { "" }, &center).map_err(|e| e.to_string())?;
             row += 1;
         }
     }
@@ -109,10 +104,11 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
     sh1.set_column_width(1, 14.0).ok();
     sh1.set_column_width(2, 14.0).ok();
     sh1.set_column_width(3, 14.0).ok();
+    sh1.set_column_width(4, 10.0).ok();
 
     // ─── Sheet 2: cases ─────────────────────────────────────────────────────
     let sh2 = wb.add_worksheet().set_name("เคสชันสูตร").map_err(|e| e.to_string())?;
-    let h2 = ["วันที่", "ช่วงเวลา", "ประเภท", "ชื่อเคส", "เวลาออก", "เวลากลับ", "นาทีออก"];
+    let h2 = ["วันที่", "ช่วงเวลา", "ประเภท", "เวลาออก", "เวลากลับ", "นาทีออก"];
     for (c, label) in h2.iter().enumerate() {
         sh2.write_with_format(0, c as u16, *label, &header_fmt).map_err(|e| e.to_string())?;
     }
@@ -124,21 +120,20 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
             sh2.write_with_format(row, 0, &c.date, &center).map_err(|e| e.to_string())?;
             sh2.write_with_format(row, 1, slot_str(c.slot), &center).map_err(|e| e.to_string())?;
             sh2.write_with_format(row, 2, shift_type_str(c.shift_type), &center).map_err(|e| e.to_string())?;
-            sh2.write_string(row, 3, "").map_err(|e| e.to_string())?; // case_name not in calc::ShiftCase
-            sh2.write_string(row, 4, c.leave_time.as_deref().unwrap_or("")).map_err(|e| e.to_string())?;
-            sh2.write_string(row, 5, c.return_time.as_deref().unwrap_or("")).map_err(|e| e.to_string())?;
+            sh2.write_string(row, 3, c.leave_time.as_deref().unwrap_or("")).map_err(|e| e.to_string())?;
+            sh2.write_string(row, 4, c.return_time.as_deref().unwrap_or("")).map_err(|e| e.to_string())?;
             let mins = case_minutes(c.leave_time.as_deref(), c.return_time.as_deref());
-            sh2.write_number(row, 6, mins as f64).map_err(|e| e.to_string())?;
+            sh2.write_number(row, 5, mins as f64).map_err(|e| e.to_string())?;
             row += 1;
         }
     }
-    for (i, w) in [12.0, 14.0, 14.0, 22.0, 12.0, 12.0, 10.0].iter().enumerate() {
+    for (i, w) in [12.0, 14.0, 14.0, 12.0, 12.0, 10.0].iter().enumerate() {
         sh2.set_column_width(i as u16, *w).ok();
     }
 
     // ─── Sheet 3: per-slot pay breakdown ────────────────────────────────────
     let sh3 = wb.add_worksheet().set_name("แจกแจงเงิน").map_err(|e| e.to_string())?;
-    let h3 = ["วันที่", "ช่วงเวลา", "ประเภท", "แพทย์", "ฐาน", "หัก", "เคส", "โบนัส", "รวม"];
+    let h3 = ["วันที่", "ช่วงเวลา", "ประเภท", "แพทย์", "นอกเวลา?", "ฐาน", "หัก", "เคส", "โบนัส", "รวม"];
     for (c, label) in h3.iter().enumerate() {
         sh3.write_with_format(0, c as u16, *label, &header_fmt).map_err(|e| e.to_string())?;
     }
@@ -148,10 +143,6 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
         totals.insert(name.to_string(), DoctorTotal::default());
     }
     for bundle in [&payload.out_hos, &payload.in_hos].into_iter().flatten() {
-        let lookup_map = build_lookup(bundle);
-        let lookup = |d: &str, s: Slot| -> Option<String> {
-            lookup_map.get(&(d.to_string(), s)).cloned()
-        };
         let mut sorted = bundle.assignments.iter().collect::<Vec<_>>();
         sorted.sort_by(|a, b| a.date.cmp(&b.date).then(slot_str(a.slot).cmp(slot_str(b.slot))));
         for a in sorted {
@@ -164,17 +155,18 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
                 .filter(|c| c.date == a.date && c.slot == a.slot)
                 .cloned()
                 .collect();
-            let pay = compute_slot_pay(a, &cases_in_slot, &lookup);
+            let pay = compute_slot_pay(a, &cases_in_slot, holidays);
             let doc = a.doctor_name.clone().unwrap();
             sh3.write_with_format(row, 0, &a.date, &center).map_err(|e| e.to_string())?;
             sh3.write_with_format(row, 1, slot_str(a.slot), &center).map_err(|e| e.to_string())?;
             sh3.write_with_format(row, 2, shift_type_str(a.shift_type), &center).map_err(|e| e.to_string())?;
             sh3.write_string(row, 3, &doc).map_err(|e| e.to_string())?;
-            sh3.write_number_with_format(row, 4, pay.base, &money_fmt).map_err(|e| e.to_string())?;
-            sh3.write_number_with_format(row, 5, -pay.deduction, &money_fmt).map_err(|e| e.to_string())?;
-            sh3.write_number(row, 6, cases_in_slot.len() as f64).map_err(|e| e.to_string())?;
-            sh3.write_number_with_format(row, 7, pay.case_bonus, &money_fmt).map_err(|e| e.to_string())?;
-            sh3.write_number_with_format(row, 8, pay.total, &money_fmt).map_err(|e| e.to_string())?;
+            sh3.write_with_format(row, 4, if pay.off_hour { "✓" } else { "" }, &center).map_err(|e| e.to_string())?;
+            sh3.write_number_with_format(row, 5, pay.base, &money_fmt).map_err(|e| e.to_string())?;
+            sh3.write_number_with_format(row, 6, -pay.deduction, &money_fmt).map_err(|e| e.to_string())?;
+            sh3.write_number(row, 7, cases_in_slot.len() as f64).map_err(|e| e.to_string())?;
+            sh3.write_number_with_format(row, 8, pay.case_bonus, &money_fmt).map_err(|e| e.to_string())?;
+            sh3.write_number_with_format(row, 9, pay.total, &money_fmt).map_err(|e| e.to_string())?;
             if let Some(t) = totals.get_mut(&doc) {
                 match a.shift_type {
                     ShiftType::OutHos => t.out_hos += pay.total,
@@ -185,7 +177,7 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
             row += 1;
         }
     }
-    for (i, w) in [12.0, 14.0, 14.0, 14.0, 12.0, 12.0, 8.0, 14.0, 14.0].iter().enumerate() {
+    for (i, w) in [12.0, 14.0, 14.0, 14.0, 10.0, 12.0, 12.0, 8.0, 14.0, 14.0].iter().enumerate() {
         sh3.set_column_width(i as u16, *w).ok();
     }
 
@@ -205,7 +197,6 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
         sh4.write_number_with_format(row, 3, t.total, &money_fmt).map_err(|e| e.to_string())?;
         row += 1;
     }
-    // Grand total row
     sh4.write_with_format(row, 0, "รวมทั้งหมด", &header_fmt).map_err(|e| e.to_string())?;
     let sum_out: f64 = DOCTORS.iter().map(|n| totals.get(*n).map(|t| t.out_hos).unwrap_or(0.0)).sum();
     let sum_in: f64 = DOCTORS.iter().map(|n| totals.get(*n).map(|t| t.in_hos).unwrap_or(0.0)).sum();
