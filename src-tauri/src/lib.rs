@@ -10,6 +10,8 @@
 // it in TS for live preview, but persisted totals must come from here.
 
 pub mod calc;
+pub mod keys;
+pub mod ocr;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
 
@@ -41,13 +43,20 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
+            commands::get_api_key,
+            commands::set_api_key,
+            commands::clear_api_key,
+            commands::has_api_key,
+            commands::ocr_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
 mod commands {
+    use crate::{keys, ocr};
     use serde::Serialize;
+    use std::path::PathBuf;
 
     #[derive(Serialize)]
     pub struct AppInfo {
@@ -61,5 +70,48 @@ mod commands {
             version: env!("CARGO_PKG_VERSION"),
             name: env!("CARGO_PKG_NAME"),
         }
+    }
+
+    // ─── Keyring (API key in Windows Credential Manager) ────────────────────
+
+    #[tauri::command]
+    pub fn get_api_key() -> Result<Option<String>, String> {
+        keys::get_api_key()
+    }
+
+    #[tauri::command]
+    pub fn has_api_key() -> Result<bool, String> {
+        keys::get_api_key().map(|v| v.is_some())
+    }
+
+    #[tauri::command]
+    pub fn set_api_key(value: String) -> Result<(), String> {
+        let v = value.trim();
+        if v.is_empty() {
+            return Err("API key ว่าง — ไม่บันทึก".into());
+        }
+        keys::set_api_key(v)
+    }
+
+    #[tauri::command]
+    pub fn clear_api_key() -> Result<(), String> {
+        keys::clear_api_key()
+    }
+
+    // ─── OCR ────────────────────────────────────────────────────────────────
+
+    #[tauri::command]
+    pub async fn ocr_run(
+        image_path: String,
+        year_month: String,
+        holidays: Option<Vec<u32>>,
+    ) -> Result<ocr::OcrResult, String> {
+        let key = keys::get_api_key()?
+            .ok_or_else(|| "ยังไม่ได้ตั้ง Anthropic API Key — ไปที่หน้า ตั้งค่า".to_string())?;
+        let path = PathBuf::from(image_path);
+        if !path.exists() {
+            return Err(format!("ไม่พบไฟล์: {}", path.display()));
+        }
+        ocr::run_ocr(&path, &year_month, &key, holidays.as_deref().unwrap_or(&[])).await
     }
 }

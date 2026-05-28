@@ -8,10 +8,12 @@ import { currentYearMonth, formatBEMonth, toThaiNumerals } from "@/lib/buddhist"
 import { fmtBaht } from "@/lib/utils";
 import { useMonth } from "@/hooks/useShift";
 import { computeMonthByDoctor } from "@/lib/calc-month";
+import { OcrDialog } from "@/components/ocr/OcrDialog";
 
 /** /out and /in — month picker, calendar grid, 4 doctor summary cards. */
 export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
   const [ym, setYm] = useState(currentYearMonth());
+  const [ocrOpen, setOcrOpen] = useState(false);
   const title = SHIFT_TYPE_LABEL[shiftType];
   const route = shiftType === "outHos" ? "out" : "in";
 
@@ -66,13 +68,14 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
 
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
-          disabled
-          title="OCR upload จะเชื่อมในรอบถัดไป"
+          onClick={() => setOcrOpen(true)}
+          className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
         >
           <Upload className="h-4 w-4" /> เพิ่มตารางเวร
         </button>
       </div>
+
+      {ocrOpen && <OcrDialog yearMonth={ym} onClose={() => setOcrOpen(false)} />}
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="mb-3 text-sm font-semibold text-zinc-500">ปฏิทินรายวัน — {formatBEMonth(ym + "-01")}</div>
