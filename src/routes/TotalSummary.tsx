@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { Download, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { ChevronRight, Download, Loader2 } from "lucide-react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { DOCTORS, DOCTOR_COLOR_HEX, type Doctor } from "@/lib/doctors";
@@ -144,7 +145,9 @@ export function TotalSummary({ mode }: { mode: Mode }) {
         </div>
       </header>
 
-      {mode === "all" ? <AllTable rows={rows} yearMonth={ym} /> : <SimpleTable rows={rows} mode={mode} />}
+      {mode === "all"
+        ? <AllTable rows={rows} yearMonth={ym} />
+        : <SimpleTable rows={rows} mode={mode} yearMonth={ym} />}
     </div>
   );
 }
@@ -233,8 +236,11 @@ function AutopsyInput({
   const [local, setLocal] = useState(String(value));
   const upsert = useUpsertAutopsyCount();
 
-  // Resync if external value changes (e.g. after fresh fetch).
-  useMemo(() => setLocal(String(value)), [value]);
+  // Resync local input when the upstream value changes (e.g. after the
+  // mutation's invalidation re-fetches and we get the persisted number back).
+  // Was a useMemo before — that fires during render and doesn't reliably
+  // catch the refetch round-trip, so the UI looked frozen even after save.
+  useEffect(() => { setLocal(String(value)); }, [value]);
 
   const flush = () => {
     const n = parseInt(local || "0", 10);
@@ -259,13 +265,15 @@ function AutopsyInput({
 
 /* ───── Simpler table for /summary/out and /summary/in ─────────────────── */
 
-function SimpleTable({ rows, mode }: {
+function SimpleTable({ rows, mode, yearMonth }: {
   rows: Array<{ doctor: Doctor; outTotal: number; inTotal: number }>;
   mode: "outHos" | "inHos";
+  yearMonth: string;
 }) {
   const isOut = mode === "outHos";
   const colLabel = isOut ? "ค่าเวรชันสูตรนอก" : "ค่าเวรชันสูตรใน";
   const tone = isOut ? "text-violet-700" : "text-emerald-700";
+  const route = isOut ? "out" : "in";
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
       <table className="w-full text-sm">
@@ -273,6 +281,7 @@ function SimpleTable({ rows, mode }: {
           <tr>
             <th className="px-4 py-3 text-left">แพทย์</th>
             <th className="px-4 py-3 text-right">{colLabel}</th>
+            <th className="px-4 py-3 text-right">แจกแจง</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-100">
@@ -287,6 +296,14 @@ function SimpleTable({ rows, mode }: {
                   </span>
                 </td>
                 <td className={`px-4 py-3 text-right font-semibold tabular-nums ${tone}`}>{fmtBaht(v)}</td>
+                <td className="px-4 py-3 text-right">
+                  <Link
+                    to={`/breakdown/${route}/${encodeURIComponent(r.doctor)}/${yearMonth}`}
+                    className={`inline-flex items-center gap-1 text-xs hover:underline ${tone}`}
+                  >
+                    ดู row-by-row <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </td>
               </tr>
             );
           })}
@@ -297,6 +314,7 @@ function SimpleTable({ rows, mode }: {
             <td className={`px-4 py-3 text-right tabular-nums ${tone}`}>
               {fmtBaht(rows.reduce((a, r) => a + (isOut ? r.outTotal : r.inTotal), 0))}
             </td>
+            <td />
           </tr>
         </tfoot>
       </table>

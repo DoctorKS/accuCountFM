@@ -237,11 +237,15 @@ export async function upsertAutopsyCount(
   doctorName: string,
   patch: { cuts?: number; non_cuts?: number },
 ): Promise<void> {
-  // Read-merge-write upsert so callers can patch a single field
-  // without nuking the other.
+  // NULLs in `patch` mean "leave this column alone". On INSERT we coalesce
+  // to 0 so the NOT-NULL constraint on the columns is satisfied; on UPDATE
+  // we coalesce to the existing column value so a partial patch preserves
+  // the other field. Without the INSERT-side COALESCE, first-time edits of
+  // a single field would silently fail (NOT NULL violation → mutation rejects
+  // → query never invalidates → UI never updates).
   await (await db()).execute(
     `INSERT INTO doctor_autopsy_counts (year_month, doctor_name, cuts, non_cuts, updated_at)
-     VALUES ($1, $2, $3, $4, datetime('now'))
+     VALUES ($1, $2, COALESCE($3, 0), COALESCE($4, 0), datetime('now'))
      ON CONFLICT(year_month, doctor_name) DO UPDATE SET
        cuts = COALESCE($3, cuts),
        non_cuts = COALESCE($4, non_cuts),
