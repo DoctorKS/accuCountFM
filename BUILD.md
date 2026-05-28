@@ -163,16 +163,25 @@ Unsigned installers always trigger Windows SmartScreen:
 
 User can click "More info → Run anyway" to bypass.
 
-To get rid of the warning permanently, **code-sign** the installer:
+To get rid of the warning, **code-sign** the installer. The repo ships
+two free routes (self-signed and SignPath Foundation) plus a paid menu
+— full step-by-step in [**SIGN.md**](SIGN.md).
 
-- Buy a code-signing certificate ($100-500/year from Sectigo, DigiCert,
-  SSL.com, SignPath, etc.).
-- Sign the `.msi` / `.exe` with `signtool sign /f cert.pfx /p PASS ...`.
-- Tauri can sign automatically if you set `tauri.conf.json::bundle.windows.signCommand`.
+Quick recap of the self-signed flow (already wired into `tauri.conf.json`):
 
-A free middle-ground: self-sign with `New-SelfSignedCertificate` + ship
-the public cert and ask the user to add it to their Trusted Publishers
-store. Reduces SmartScreen warning but isn't fully clean.
+```powershell
+# One-time:
+$env:ACCUCOUNT_SIGN_PASSWORD = "your-password"
+powershell -ExecutionPolicy Bypass -File tools/setup-self-signed.ps1
+
+# Every build:
+$env:ACCUCOUNT_SIGN_PFX      = "C:\dev\accuCountFM\tools\signing.pfx"
+$env:ACCUCOUNT_SIGN_PASSWORD = "your-password"
+npm run tauri:build
+```
+
+Tauri picks up `bundle.windows.signCommand` and runs `tools/sign.ps1`
+against every produced artifact automatically.
 
 ---
 

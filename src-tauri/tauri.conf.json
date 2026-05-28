@@ -38,7 +38,10 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "signCommand": "powershell.exe -ExecutionPolicy Bypass -File ../tools/sign.ps1 -File \"%1\""
+    }
   },
   "plugins": {
     "sql": {

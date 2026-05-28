@@ -34,6 +34,12 @@ Thumbs.db
 *.key
 *.pem
 
+# Code-signing certs — private parts never go in the repo.
+# tools/setup-self-signed.ps1 generates these locally.
+*.pfx
+tools/*.cer
+tools/signing.*
+
 # Logs
 *.log
 npm-debug.log*
