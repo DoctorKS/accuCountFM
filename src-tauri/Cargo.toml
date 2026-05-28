@@ -1,0 +1,55 @@
+[package]
+name = "accucountfm"
+version = "0.1.0"
+description = "Forensic doctor on-call shift pay calculator"
+authors = ["DoctorKS <kawinkawin159357@gmail.com>"]
+license = "UNLICENSED"
+repository = "https://github.com/DoctorKS/accuCountFM"
+edition = "2021"
+rust-version = "1.78"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.2" }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+thiserror = "1"
+
+tauri = { version = "2.11.2" }
+tauri-plugin-log = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+# Storage
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros"] }
+
+# Date/time (calendar math for chain detection)
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+
+# OCR HTTP client (Claude vision API)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
+base64 = "0.22"
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "fs"] }
+
+# OS-keyring for API key (Windows Credential Manager backend)
+keyring = "3"
+
+# Excel export
+rust_xlsxwriter = { version = "0.95", features = ["chrono"] }
+
+[dev-dependencies]
+# Snapshot/property testing for calc.rs
+insta = "1"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = "z"
