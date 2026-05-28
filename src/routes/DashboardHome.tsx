@@ -1,9 +1,13 @@
 import { Link } from "react-router-dom";
-import { Stethoscope, Building2 } from "lucide-react";
+import logoOutHos from "@/assets/logo-out-hos.png";
+import logoInHos from "@/assets/logo-in-hos.png";
 
 /**
  * Dashboard home — two big buttons. Per requirement, this is the user's first
  * landing screen on every cold start.
+ *
+ * Icons are project logos in src/assets/ (Vite hashes the URL at build time
+ * so the installer ships them — no network fetch).
  */
 export function DashboardHome() {
   return (
@@ -19,14 +23,16 @@ export function DashboardHome() {
           title="เวรชันสูตรนอก"
           subtitle="ชันสูตรพลิกศพนอกโรงพยาบาล"
           tone="violet"
-          Icon={Stethoscope}
+          imageSrc={logoOutHos}
+          imageAlt="โลโก้เวรชันสูตรนอก"
         />
         <BigButton
           to="/in"
           title="เวรชันสูตรใน"
           subtitle="ชันสูตรในรพ. + รับปรึกษารพช."
           tone="emerald"
-          Icon={Building2}
+          imageSrc={logoInHos}
+          imageAlt="โลโก้เวรชันสูตรใน"
         />
       </div>
     </div>
@@ -34,10 +40,14 @@ export function DashboardHome() {
 }
 
 function BigButton({
-  to, title, subtitle, tone, Icon,
+  to, title, subtitle, tone, imageSrc, imageAlt,
 }: {
-  to: string; title: string; subtitle: string; tone: "violet" | "emerald";
-  Icon: React.ComponentType<{ className?: string }>;
+  to: string;
+  title: string;
+  subtitle: string;
+  tone: "violet" | "emerald";
+  imageSrc: string;
+  imageAlt: string;
 }) {
   const styles =
     tone === "violet"
@@ -48,8 +58,15 @@ function BigButton({
       to={to}
       className={`flex flex-col items-start justify-between rounded-2xl p-8 ring-1 transition-all hover:scale-[1.01] hover:shadow-md ${styles}`}
     >
-      <Icon className="h-12 w-12 opacity-80" />
-      <div className="mt-12">
+      <img
+        src={imageSrc}
+        alt={imageAlt}
+        // object-contain keeps the logo's aspect ratio whatever shape it ships in.
+        // drop-shadow + opacity gives the same visual weight as the old icons.
+        className="h-20 w-20 object-contain drop-shadow-sm"
+        draggable={false}
+      />
+      <div className="mt-10">
         <div className="text-2xl font-bold">{title}</div>
         <div className="mt-1 text-sm opacity-75">{subtitle}</div>
       </div>
