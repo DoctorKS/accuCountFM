@@ -87,10 +87,8 @@ export function VerifyDialog({ yearMonth, onClose }: { yearMonth: string; onClos
                   const dow = dt.getUTCDay();
                   const isWeekend = dow === 0 || dow === 6;
                   const isHoliday = holidays.includes(d);
-                  const rowTint =
-                    isHoliday ? "bg-rose-100/60" :
-                    isWeekend ? "bg-rose-50/60" :
-                    "";
+                  // Weekend + holiday share the same light-red row tint.
+                  const rowTint = (isHoliday || isWeekend) ? "bg-rose-50/60" : "";
 
                   return (
                     <tr key={d} className={rowTint}>

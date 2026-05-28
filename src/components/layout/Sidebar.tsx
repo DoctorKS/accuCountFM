@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { to: "/",            label: "Dashboard",              Icon: LayoutDashboard, end: true },
-  { to: "/summary",     label: "เงินเวรรวมทั้งหมด",        Icon: Sigma },
   { to: "/summary/in",  label: "สรุปเงินเวรชันสูตรใน",     Icon: FileText },
   { to: "/summary/out", label: "สรุปเงินเวรชันสูตรนอก",    Icon: FileSearch },
+  { to: "/summary",     label: "เงินเวรรวมทั้งหมด",        Icon: Sigma },
 ];
 
 export function Sidebar() {

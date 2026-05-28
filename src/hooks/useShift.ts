@@ -19,9 +19,12 @@ import {
   listMonthHolidays,
   addHoliday,
   removeHoliday,
+  listMonthAutopsyCounts,
+  upsertAutopsyCount,
   type AssignmentRow,
   type CaseRow,
   type HolidayRow,
+  type AutopsyCountRow,
 } from "@/lib/db";
 import type { ShiftType, Slot } from "@/lib/constants";
 import type { Doctor } from "@/lib/doctors";
@@ -127,6 +130,29 @@ export function useAddHoliday() {
       // Holidays affect off-hour status across BOTH shift types → invalidate broadly
       qc.invalidateQueries({ queryKey: ["month", "outHos", vars.yearMonth] });
       qc.invalidateQueries({ queryKey: ["month", "inHos", vars.yearMonth] });
+    },
+  });
+}
+
+// ─── Autopsy counts ─────────────────────────────────────────────────────────
+
+export function useAutopsyCounts(yearMonth: string) {
+  return useQuery<AutopsyCountRow[]>({
+    queryKey: ["autopsy-counts", yearMonth],
+    queryFn: () => listMonthAutopsyCounts(yearMonth),
+  });
+}
+
+export function useUpsertAutopsyCount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ yearMonth, doctorName, patch }: {
+      yearMonth: string;
+      doctorName: string;
+      patch: { cuts?: number; non_cuts?: number };
+    }) => upsertAutopsyCount(yearMonth, doctorName, patch),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["autopsy-counts", vars.yearMonth] });
     },
   });
 }

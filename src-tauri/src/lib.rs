@@ -31,6 +31,12 @@ pub fn run() {
             sql: include_str!("../migrations/0002_holidays.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "doctor autopsy counts",
+            sql: include_str!("../migrations/0003_autopsy_counts.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

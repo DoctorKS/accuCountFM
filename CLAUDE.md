@@ -59,6 +59,8 @@ Native Windows app, ไม่มี auth, เก็บ local-first บนเค�
 | Virtual time ต่อ 1 เคสใน (inHos) | `IN_HOS_MIN_PER_CASE = 10` | |
 | Grace period (ไม่หัก) | `GRACE_MIN = 4` | "1-4 นาทีแรกไม่หัก" |
 | **off-hour predicate** | `is_off_hour(date, slot, holidays)` | "นอกเวลา / ในเวลา" |
+| ค่าผ่าต่อเคส (เจาะตัดเนื้อ) | `AUTOPSY_CUT_RATE = 4500` | "ผ่า × 4,500" |
+| ค่าผ่าต่อเคส (ไม่ตัดเนื้อ) | `AUTOPSY_NON_CUT_RATE = 2250` | "ผ่าไม่ตัดเนื้อ × 2,250" |
 
 ```rust
 // src-tauri/src/calc.rs — ห้ามเปลี่ยนค่าเหล่านี้โดยไม่ถาม
@@ -226,6 +228,7 @@ secret: <sk-ant-...>
 | `shift_assignments` | 1 row per (shift_type, date, slot) → doctor | (shift_type, date, slot) |
 | `shift_cases` | N rows per slot, ordered by `position` | id |
 | `holidays` | 1 row per (year_month, day) → optional note | (year_month, day) |
+| `doctor_autopsy_counts` | per-doctor monthly ผ่า + ผ่าไม่ตัดเนื้อ counts | (year_month, doctor_name) |
 | `ocr_uploads` | history ของรูปที่อัพ + raw JSON | id |
 | `settings` | misc key/value (last_view ฯลฯ; **ไม่เก็บ API key ที่นี่**) | key |
 

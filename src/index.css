@@ -1,3 +1,36 @@
+/* TH Sarabun New — embedded in repo so installer is self-contained.
+ * Files in src/assets/fonts/ (downloaded from Phonbopit/sarabun-webfont,
+ * SIPA's public-domain TH Sarabun New webfont). Vite bundles via relative url().
+ */
+@font-face {
+  font-family: "TH Sarabun New";
+  src: url("./assets/fonts/thsarabunnew-webfont.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "TH Sarabun New";
+  src: url("./assets/fonts/thsarabunnew_bold-webfont.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "TH Sarabun New";
+  src: url("./assets/fonts/thsarabunnew_italic-webfont.woff") format("woff");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "TH Sarabun New";
+  src: url("./assets/fonts/thsarabunnew_bolditalic-webfont.woff") format("woff");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,7 +43,7 @@
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-    --primary: 252 84% 41%;            /* indigo-ish, accent for "accuCountFM" */
+    --primary: 252 84% 41%;
     --primary-foreground: 0 0% 98%;
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
@@ -28,5 +61,10 @@
 
   * { @apply border-zinc-200; }
   html, body, #root { @apply h-full; }
-  body { @apply font-sans; }
+  body {
+    @apply font-sans;
+    /* TH Sarabun New looks visually small at default sizes — bump base. */
+    font-size: 16px;
+    line-height: 1.5;
+  }
 }

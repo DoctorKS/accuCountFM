@@ -111,8 +111,10 @@ export function HolidayPickerDialog({ yearMonth, onClose }: { yearMonth: string;
                   const isHoliday = days.has(d);
                   const note = noteByDay.get(d);
 
+                  // Weekend + holiday share the same light-red BG; holiday
+                  // gets an extra ring so user can still tell them apart.
                   const cls = isHoliday
-                    ? "bg-rose-100 font-bold text-rose-700 ring-2 ring-rose-400"
+                    ? "bg-rose-50 font-bold text-rose-700 ring-2 ring-rose-400"
                     : isWeekend
                       ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100"
                       : "bg-zinc-50 text-zinc-700 ring-1 ring-zinc-200 hover:bg-violet-100";

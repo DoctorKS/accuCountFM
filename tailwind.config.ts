@@ -5,7 +5,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"IBM Plex Sans Thai"', '"IBM Plex Sans"', "system-ui", "sans-serif"],
+        // TH Sarabun New = SIPA's public-domain Thai font (embedded in repo).
+        // Fallback chain in case @font-face fails (e.g. CSP issues mid-dev).
+        sans: ['"TH Sarabun New"', '"IBM Plex Sans Thai"', "Sarabun", "system-ui", "sans-serif"],
       },
       colors: {
         // Doctor signature colors — matches CLAUDE.md "UI conventions"

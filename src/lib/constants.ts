@@ -13,6 +13,10 @@ export const DEDUCT_PER_HALF_HOUR = 48.75;
 export const IN_HOS_MIN_PER_CASE = 10;
 export const GRACE_MIN = 4;
 
+/** Per-case rates for autopsy work, summed monthly in TotalSummary. */
+export const AUTOPSY_CUT_RATE = 4500;      // ผ่า (เจาะตัดเนื้อ)
+export const AUTOPSY_NON_CUT_RATE = 2250;  // ผ่าไม่ตัดเนื้อ
+
 export type ShiftType = "outHos" | "inHos";
 export type Slot = "0000-0800" | "0800-1600" | "1600-2400";
 

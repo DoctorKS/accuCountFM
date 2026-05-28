@@ -12,7 +12,7 @@ import { VerifyDialog } from "@/components/verify/VerifyDialog";
 import { HolidayChips } from "@/components/shift/HolidayChips";
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker";
 
-/** /out and /in — month picker, calendar grid, 4 doctor summary cards. */
+/** /out and /in — month picker, calendar grid (left), 4 doctor cards (right). */
 export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
   const [ym, setYm] = useState(currentYearMonth());
   const [ocrOpen, setOcrOpen] = useState(false);
@@ -27,8 +27,6 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
     return computeMonthByDoctor(shiftType, month.data.assignments, month.data.cases, month.data.holidays);
   }, [month.data, shiftType]);
 
-  // Day-status hint for the calendar grid: green dot when all 3 slots assigned;
-  // amber dot when 1-2; gray when 0.
   const dayStatus = useMemo(() => {
     const m = new Map<string, { assigned: number; cases: number }>();
     if (!month.data) return m;
@@ -50,7 +48,7 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
   const holidays = month.data?.holidays ?? [];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-6">
+    <div className="mx-auto max-w-7xl space-y-5 p-6">
       <div className="flex items-center justify-between">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-900">
           <ArrowLeft className="h-4 w-4" /> กลับหน้าหลัก
@@ -61,7 +59,6 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
 
       <div className="flex items-end justify-between gap-4">
         <MonthYearPicker value={ym} onChange={setYm} />
-
         <div className="flex gap-2">
           <button
             type="button"
@@ -85,90 +82,89 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
       {ocrOpen && <OcrDialog yearMonth={ym} onClose={() => setOcrOpen(false)} />}
       {verifyOpen && <VerifyDialog yearMonth={ym} onClose={() => setVerifyOpen(false)} />}
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4">
-        <div className="mb-3 text-sm font-semibold text-zinc-500">ปฏิทินรายวัน — {formatBEMonth(ym + "-01")}</div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        {/* ─── Calendar (smaller tiles to fit alongside doctor cards) ─── */}
+        <section className="rounded-2xl border border-zinc-200 bg-white p-4 lg:col-span-8">
+          <div className="mb-3 text-sm font-semibold text-zinc-500">
+            ปฏิทินรายวัน — {formatBEMonth(ym + "-01")}
+          </div>
 
-        <div className="grid grid-cols-7 gap-2">
-          {/* Weekday header row (Thai abbrevs) */}
-          {WEEKDAY_TH_SHORT.map((dow, i) => (
-            <div
-              key={dow}
-              className={`py-2 text-center text-xs font-semibold ${i === 0 || i === 6 ? "text-rose-500" : "text-zinc-500"}`}
-            >
-              {dow}
-            </div>
-          ))}
-
-          {/* Empty cells before day 1 */}
-          {Array.from({ length: startDow }, (_, i) => (
-            <div key={`empty-${i}`} aria-hidden />
-          ))}
-
-          {/* Day cells */}
-          {Array.from({ length: dim }, (_, i) => i + 1).map((d) => {
-            const date = `${ym}-${String(d).padStart(2, "0")}`;
-            const status = dayStatus.get(date);
-            const filled = status ? status.assigned : 0;
-            const dot = filled === 3 ? "bg-emerald-500" : filled > 0 ? "bg-amber-400" : "bg-zinc-200";
-            const dt = new Date(date + "T00:00:00Z");
-            const dow = dt.getUTCDay();
-            const isWeekend = dow === 0 || dow === 6;
-            const isHoliday = holidays.includes(d);
-            // Both weekends + holidays get the light-red treatment.
-            // Holidays get a slightly stronger ring to differentiate.
-            const tileBg =
-              isHoliday ? "bg-rose-100 border-rose-300 hover:bg-rose-200" :
-              isWeekend ? "bg-rose-50 border-rose-200 hover:bg-rose-100" :
-              "bg-zinc-50 border-zinc-200 hover:bg-violet-50";
-            return (
-              <Link
-                key={d}
-                to={`/shift/${route}/${date}`}
-                className={`group relative flex aspect-square flex-col items-center justify-center rounded-2xl border text-zinc-700 transition-colors ${tileBg}`}
-                title={isHoliday ? "วันหยุดนักขัตฤกษ์" : isWeekend ? "วันหยุดสุดสัปดาห์" : ""}
+          <div className="grid grid-cols-7 gap-1.5">
+            {WEEKDAY_TH_SHORT.map((dow, i) => (
+              <div
+                key={dow}
+                className={`py-1.5 text-center text-xs font-semibold ${i === 0 || i === 6 ? "text-rose-500" : "text-zinc-500"}`}
               >
-                <div className="text-xl font-semibold tabular-nums">{d}</div>
-                <div className={`mt-1 h-1.5 w-1.5 rounded-full ${dot}`} />
-                {status && status.cases > 0 && (
-                  <div className="mt-0.5 text-[10px] tabular-nums text-zinc-500 group-hover:text-violet-600">
-                    {status.cases} เคส
-                  </div>
-                )}
-                {isHoliday && (
-                  <div className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-rose-500" />
-                )}
-              </Link>
-            );
-          })}
-        </div>
-      </section>
+                {dow}
+              </div>
+            ))}
 
-      <section>
-        <h2 className="mb-3 text-sm font-semibold text-zinc-500">สรุปเงิน{title}ทั้งเดือน</h2>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {Array.from({ length: startDow }, (_, i) => (
+              <div key={`empty-${i}`} aria-hidden />
+            ))}
+
+            {Array.from({ length: dim }, (_, i) => i + 1).map((d) => {
+              const date = `${ym}-${String(d).padStart(2, "0")}`;
+              const status = dayStatus.get(date);
+              const filled = status ? status.assigned : 0;
+              const dot = filled === 3 ? "bg-emerald-500" : filled > 0 ? "bg-amber-400" : "bg-zinc-200";
+              const dt = new Date(date + "T00:00:00Z");
+              const dow = dt.getUTCDay();
+              const isWeekend = dow === 0 || dow === 6;
+              const isHoliday = holidays.includes(d);
+              // Per request: weekend + holiday share the same light-red BG.
+              const tileBg = (isWeekend || isHoliday)
+                ? "bg-rose-50 border-rose-200 hover:bg-rose-100"
+                : "bg-zinc-50 border-zinc-200 hover:bg-violet-50";
+              return (
+                <Link
+                  key={d}
+                  to={`/shift/${route}/${date}`}
+                  className={`group relative flex h-16 flex-col items-center justify-center rounded-xl border text-zinc-700 transition-colors ${tileBg}`}
+                  title={isHoliday ? "วันหยุดนักขัตฤกษ์" : isWeekend ? "วันหยุดสุดสัปดาห์" : ""}
+                >
+                  <div className="text-base font-semibold leading-none tabular-nums">{d}</div>
+                  <div className={`mt-1 h-1.5 w-1.5 rounded-full ${dot}`} />
+                  {status && status.cases > 0 && (
+                    <div className="mt-0.5 text-[9px] tabular-nums text-zinc-500 group-hover:text-violet-600">
+                      {status.cases} เคส
+                    </div>
+                  )}
+                  {isHoliday && (
+                    <div className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-rose-500" />
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ─── Doctor summary cards (stacked vertically on the right) ──── */}
+        <section className="space-y-3 lg:col-span-4">
+          <h2 className="text-sm font-semibold text-zinc-500">สรุปเงิน{title}ทั้งเดือน</h2>
           {DOCTORS.map((d) => {
             const ds = summary?.find((s) => s.doctor === d);
             return (
-              <div key={d} className={`flex items-center justify-between rounded-xl p-4 shadow-sm ring-1 ${DOCTOR_BG_CLASS[d]}`}>
-                <div>
-                  <div className="text-xs font-medium text-zinc-500">แพทย์</div>
-                  <div className="text-lg font-semibold text-zinc-900">{d}</div>
+              <div key={d} className={`flex items-center justify-between rounded-xl p-3 shadow-sm ring-1 ${DOCTOR_BG_CLASS[d]}`}>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">แพทย์</div>
+                  <div className="truncate text-base font-semibold text-zinc-900">{d}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs text-zinc-500">ยอดรวม</div>
-                  <div className="text-xl font-bold text-zinc-900 tabular-nums">{fmtBaht(ds?.total ?? 0)}</div>
+                  <div className="text-[10px] text-zinc-500">ยอดรวม</div>
+                  <div className="text-lg font-bold text-zinc-900 tabular-nums">{fmtBaht(ds?.total ?? 0)}</div>
                 </div>
                 <Link
                   to={`/breakdown/${route}/${encodeURIComponent(d)}/${ym}`}
-                  className="ml-3 inline-flex items-center gap-1 rounded-lg bg-white/70 px-3 py-1.5 text-xs font-medium text-zinc-700 ring-1 ring-zinc-200 hover:bg-white"
+                  className="ml-2 inline-flex items-center gap-0.5 rounded-md bg-white/70 px-2 py-1 text-[10px] font-medium text-zinc-700 ring-1 ring-zinc-200 hover:bg-white"
                 >
                   แจกแจง <ChevronRight className="h-3 w-3" />
                 </Link>
               </div>
             );
           })}
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

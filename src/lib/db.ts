@@ -215,6 +215,41 @@ export async function removeHoliday(yearMonth: string, day: number): Promise<voi
   );
 }
 
+// ─── Doctor autopsy counts (ผ่า / ผ่าไม่ตัดเนื้อ per month) ─────────────────
+
+export interface AutopsyCountRow {
+  year_month: string;
+  doctor_name: string;
+  cuts: number;
+  non_cuts: number;
+  updated_at: string;
+}
+
+export async function listMonthAutopsyCounts(yearMonth: string): Promise<AutopsyCountRow[]> {
+  return (await db()).select<AutopsyCountRow[]>(
+    `SELECT * FROM doctor_autopsy_counts WHERE year_month = $1`,
+    [yearMonth],
+  );
+}
+
+export async function upsertAutopsyCount(
+  yearMonth: string,
+  doctorName: string,
+  patch: { cuts?: number; non_cuts?: number },
+): Promise<void> {
+  // Read-merge-write upsert so callers can patch a single field
+  // without nuking the other.
+  await (await db()).execute(
+    `INSERT INTO doctor_autopsy_counts (year_month, doctor_name, cuts, non_cuts, updated_at)
+     VALUES ($1, $2, $3, $4, datetime('now'))
+     ON CONFLICT(year_month, doctor_name) DO UPDATE SET
+       cuts = COALESCE($3, cuts),
+       non_cuts = COALESCE($4, non_cuts),
+       updated_at = excluded.updated_at`,
+    [yearMonth, doctorName, patch.cuts ?? null, patch.non_cuts ?? null],
+  );
+}
+
 // ─── Settings ───────────────────────────────────────────────────────────────
 
 export async function getSetting(key: string): Promise<string | null> {

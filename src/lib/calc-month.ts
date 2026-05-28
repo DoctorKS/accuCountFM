@@ -23,6 +23,11 @@ export interface SlotComputed {
 export interface DoctorMonthSummary {
   doctor: Doctor;
   total: number;
+  /** Sum of (base - deduction) over off-hour slots only — the "shift hour" pay,
+   *  excluding case bonuses. Used by TotalSummary's "ค่าชม.เวรนอกเวลา" column. */
+  offHourBaseTotal: number;
+  /** Sum of case_bonus across all slots — used by "ค่าผ่า+ชันสูตร" column. */
+  bonusTotal: number;
   slots: SlotComputed[];
 }
 
@@ -47,7 +52,9 @@ export function computeMonthByDoctor(
   }
 
   const byDoctor = Object.fromEntries(
-    DOCTORS.map((d) => [d, { doctor: d, total: 0, slots: [] as SlotComputed[] }]),
+    DOCTORS.map((d) => [d, {
+      doctor: d, total: 0, offHourBaseTotal: 0, bonusTotal: 0, slots: [] as SlotComputed[],
+    }]),
   ) as unknown as Record<Doctor, DoctorMonthSummary>;
 
   for (const a of assignments) {
@@ -69,6 +76,8 @@ export function computeMonthByDoctor(
     const pay = computeSlotPay(assignment, casesForCalc, holidays);
     const entry = byDoctor[a.doctor_name];
     entry.total += pay.total;
+    entry.offHourBaseTotal += Math.max(0, pay.base - pay.deduction);
+    entry.bonusTotal += pay.caseBonus;
     entry.slots.push({
       date: a.date,
       slot: a.slot,
