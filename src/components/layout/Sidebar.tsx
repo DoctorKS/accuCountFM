@@ -42,7 +42,10 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <div className="mt-auto space-y-1 border-t border-zinc-200 p-3">
+      {/* Divider sits directly below the main nav — bottom items stack
+          immediately under "เงินเวรรวมทั้งหมด" instead of getting pushed to
+          the bottom of the sidebar. */}
+      <div className="space-y-1 border-t border-zinc-200 p-3">
         {BOTTOM_ITEMS.map(({ to, label, Icon }) => (
           <NavLink
             key={to}
