@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useMemo } from "react";
-import { SHIFT_TYPE_LABEL, SLOT_LABEL, type ShiftType } from "@/lib/constants";
+import { SHIFT_TYPE_LABEL, SLOT_LABEL, CASE_BONUS_OUT_HOS, CASE_BONUS_IN_HOS, type ShiftType } from "@/lib/constants";
 import { formatBEMonth } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
 import { useMonth } from "@/hooks/useShift";
@@ -15,6 +15,7 @@ export function DoctorBreakdownPage() {
   const backTo = type === "in" ? "/in" : "/out";
   const doctorName = doctor ? decodeURIComponent(doctor) : "";
   const valid = isDoctor(doctorName);
+  const caseRate = shiftType === "outHos" ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS;
 
   const month = useMonth(shiftType, ym ?? "");
   const summary = useMemo(() => {
@@ -55,28 +56,47 @@ export function DoctorBreakdownPage() {
                   <th className="px-4 py-3 text-left">วันที่</th>
                   <th className="px-4 py-3 text-left">ช่วงเวลา</th>
                   <th className="px-4 py-3 text-right">ฐาน</th>
-                  <th className="px-4 py-3 text-right">หัก</th>
-                  <th className="px-4 py-3 text-right">เคส</th>
-                  <th className="px-4 py-3 text-right">โบนัส</th>
+                  <th className="px-4 py-3 text-right">หักเวลาออก</th>
+                  <th className="px-4 py-3 text-right">เคสชันสูตร</th>
                   <th className="px-4 py-3 text-right">รวม</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {summary.slots.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-6 text-center text-zinc-400">ยังไม่มีเวรในเดือนนี้</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-6 text-center text-zinc-400">ยังไม่มีเวรในเดือนนี้</td></tr>
                 )}
                 {summary.slots.map((s) => (
                   <tr key={`${s.date}|${s.slot}`} className="hover:bg-zinc-50">
-                    <td className="px-4 py-2 font-mono text-xs">{s.date}</td>
-                    <td className="px-4 py-2">{SLOT_LABEL[s.slot]}</td>
+                    <td className="px-4 py-2 font-mono text-xs tabular-nums">{s.date}</td>
+                    <td className="px-4 py-2">
+                      {SLOT_LABEL[s.slot]}{" "}
+                      {s.pay.offHour ? (
+                        <span className="ml-1 text-[10px] text-rose-600">นอกเวลา</span>
+                      ) : (
+                        <span className="ml-1 text-[10px] text-zinc-400">ในเวลา</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right tabular-nums">{fmtBaht(s.pay.base)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-rose-600">{s.pay.deduction ? "−" + fmtBaht(s.pay.deduction) : "—"}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{s.caseCount}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-emerald-700">{s.pay.caseBonus ? "+" + fmtBaht(s.pay.caseBonus) : "—"}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-rose-600">
+                      {s.pay.deduction ? "−" + fmtBaht(s.pay.deduction) : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-emerald-700">
+                      {s.caseCount > 0
+                        ? <><span className="tabular-nums">{s.caseCount}</span> × {caseRate.toLocaleString()}</>
+                        : <span className="text-zinc-300">—</span>}
+                    </td>
                     <td className="px-4 py-2 text-right font-semibold tabular-nums">{fmtBaht(s.pay.total)}</td>
                   </tr>
                 ))}
               </tbody>
+              {summary.slots.length > 0 && (
+                <tfoot className="bg-zinc-50 text-sm font-semibold">
+                  <tr>
+                    <td colSpan={5} className="px-4 py-3 text-right text-zinc-600">รวมเดือน</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-violet-900">{fmtBaht(summary.total)}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </>

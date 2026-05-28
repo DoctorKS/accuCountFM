@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Plus, X, CalendarOff } from "lucide-react";
 import { useHolidays, useRemoveHoliday } from "@/hooks/useShift";
-import { toThaiNumerals } from "@/lib/buddhist";
 import { HolidayPickerDialog } from "@/components/holiday/HolidayPickerDialog";
 
 /**
@@ -34,7 +33,7 @@ export function HolidayChips({ yearMonth }: { yearMonth: string }) {
             className="group inline-flex items-center gap-1 rounded-full bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100"
             title={h.note ?? "ลบวันหยุดนี้"}
           >
-            <span className="font-semibold">{toThaiNumerals(h.day)}</span>
+            <span className="font-semibold tabular-nums">{h.day}</span>
             {h.note && <span className="text-rose-500/80">· {h.note}</span>}
             <X className="h-3 w-3 opacity-50 group-hover:opacity-100" />
           </button>

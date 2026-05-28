@@ -2,6 +2,10 @@
  * Buddhist-era helpers — DB stores Gregorian ISO strings, UI displays พ.ศ.
  *
  * Rule: NEVER store the +543 year. Convert only at the render boundary.
+ *
+ * Numerals: app-wide convention is Arabic digits (1,2,3...) — `toThaiNumerals`
+ * stays exported in case a specific surface ever wants Thai numerals, but
+ * default formatters DO NOT call it.
  */
 import dayjs from "dayjs";
 
@@ -15,19 +19,19 @@ export const WEEKDAY_TH_LONG = [
   "อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์",
 ] as const;
 
-/** Format "พฤษภาคม ๒๕๖๙" from any dayjs-parsable date. */
+/** Format "พฤษภาคม 2569" from any dayjs-parsable date. */
 export function formatBEMonth(d: dayjs.ConfigType): string {
   const dj = dayjs(d);
-  return `${MONTHS_TH[dj.month()]} ${toThaiNumerals(dj.year() + 543)}`;
+  return `${MONTHS_TH[dj.month()]} ${dj.year() + 543}`;
 }
 
-/** Format "วันศุกร์ ที่ ๑๒ พฤษภาคม ๒๕๖๙". */
+/** Format "วันศุกร์ ที่ 12 พฤษภาคม 2569". */
 export function formatBEFullDate(d: dayjs.ConfigType): string {
   const dj = dayjs(d);
-  return `วัน${WEEKDAY_TH_LONG[dj.day()]} ที่ ${toThaiNumerals(dj.date())} ${MONTHS_TH[dj.month()]} ${toThaiNumerals(dj.year() + 543)}`;
+  return `วัน${WEEKDAY_TH_LONG[dj.day()]} ที่ ${dj.date()} ${MONTHS_TH[dj.month()]} ${dj.year() + 543}`;
 }
 
-/** Convert ASCII digits to Thai numerals (๐-๙). Used for date display. */
+/** Convert ASCII digits to Thai numerals (๐-๙). Available but NOT default. */
 export function toThaiNumerals(n: number | string): string {
   return String(n).replace(/[0-9]/g, (d) => "๐๑๒๓๔๕๖๗๘๙"[+d]);
 }
@@ -40,4 +44,9 @@ export function currentYearMonth(): string {
 /** Days in a YYYY-MM string. */
 export function daysInMonth(ym: string): number {
   return dayjs(`${ym}-01`).daysInMonth();
+}
+
+/** Day-of-week of YYYY-MM-01 (0=Sun..6=Sat). Pure UTC to avoid local-tz drift. */
+export function firstDowOfMonth(ym: string): number {
+  return new Date(ym + "-01T00:00:00Z").getUTCDay();
 }

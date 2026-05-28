@@ -3,19 +3,29 @@ import { Trash2 } from "lucide-react";
 import type { CaseRow as CaseRowT } from "@/lib/db";
 import type { ShiftType } from "@/lib/constants";
 import { useUpdateCase, useDeleteCase } from "@/hooks/useShift";
+import { TimePicker24 } from "@/components/ui/TimePicker24";
 
-/** A single case row in a shift slot. outHos shows time fields; inHos shows only the case name. */
+/**
+ * A single case row in a shift slot.
+ *
+ * outHos: shows case name + เวลาออก + เวลากลับ (24-hr dropdowns)
+ * inHos:  shows case name only (each case = 10 min virtual time)
+ *
+ * Field flushes happen on blur (text) or onChange (time) — TanStack Query
+ * invalidates the month so the slot total + day total + month total all
+ * recompute via calc-month.ts.
+ */
 export function CaseRow({ row, shiftType }: { row: CaseRowT; shiftType: ShiftType }) {
   const isOut = shiftType === "outHos";
   const upd = useUpdateCase();
   const del = useDeleteCase();
   const [name, setName] = useState(row.case_name);
-  const [leave, setLeave] = useState(row.leave_time ?? "");
-  const [ret, setRet] = useState(row.return_time ?? "");
 
   const flushName = () => name !== row.case_name && upd.mutate({ id: row.id, patch: { case_name: name } });
-  const flushLeave = () => leave !== (row.leave_time ?? "") && upd.mutate({ id: row.id, patch: { leave_time: leave || null } });
-  const flushReturn = () => ret !== (row.return_time ?? "") && upd.mutate({ id: row.id, patch: { return_time: ret || null } });
+  const setLeave = (v: string | null) =>
+    v !== row.leave_time && upd.mutate({ id: row.id, patch: { leave_time: v } });
+  const setReturn = (v: string | null) =>
+    v !== row.return_time && upd.mutate({ id: row.id, patch: { return_time: v } });
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50/50 p-2">
@@ -29,8 +39,14 @@ export function CaseRow({ row, shiftType }: { row: CaseRowT; shiftType: ShiftTyp
       />
       {isOut && (
         <>
-          <TimeField label="ออก" value={leave} onChange={setLeave} onBlur={flushLeave} />
-          <TimeField label="กลับ" value={ret} onChange={setRet} onBlur={flushReturn} />
+          <label className="flex items-center gap-1 text-xs text-zinc-500">
+            <span>ออก</span>
+            <TimePicker24 value={row.leave_time} onChange={setLeave} ariaLabel="เวลาออก" />
+          </label>
+          <label className="flex items-center gap-1 text-xs text-zinc-500">
+            <span>กลับ</span>
+            <TimePicker24 value={row.return_time} onChange={setReturn} ariaLabel="เวลากลับ" />
+          </label>
         </>
       )}
       <button
@@ -42,22 +58,5 @@ export function CaseRow({ row, shiftType }: { row: CaseRowT; shiftType: ShiftTyp
         <Trash2 className="h-4 w-4" />
       </button>
     </div>
-  );
-}
-
-function TimeField({ label, value, onChange, onBlur }: {
-  label: string; value: string; onChange: (v: string) => void; onBlur: () => void;
-}) {
-  return (
-    <label className="flex items-center gap-1 text-xs text-zinc-500">
-      <span>{label}</span>
-      <input
-        type="time"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
-        className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-200"
-      />
-    </label>
   );
 }

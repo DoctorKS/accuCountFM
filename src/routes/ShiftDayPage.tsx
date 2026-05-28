@@ -7,7 +7,7 @@ import { fmtBaht } from "@/lib/utils";
 import { useMonth } from "@/hooks/useShift";
 import { computeDay } from "@/lib/calc-month";
 import { ShiftSlotCard } from "@/components/shift/ShiftSlotCard";
-import { isDoctor } from "@/lib/doctors";
+import { DOCTORS, DOCTOR_BG_CLASS, DOCTOR_COLOR_HEX, isDoctor, type Doctor } from "@/lib/doctors";
 
 /**
  * One day's shift schedule for a given shift_type.
@@ -24,6 +24,24 @@ export function ShiftDayPage() {
     if (!month.data || !date) return null;
     return computeDay(shiftType, date, month.data.assignments, month.data.cases, month.data.holidays);
   }, [month.data, shiftType, date]);
+
+  // Per-doctor totals for THIS day — sum across the 3 slots if the same
+  // doctor was assigned to more than one. Doctors who appear nowhere today
+  // are omitted.
+  const perDoctor = useMemo(() => {
+    if (!day) return [] as { doctor: Doctor; total: number; slots: number }[];
+    const map = new Map<Doctor, { total: number; slots: number }>();
+    for (const slot of Object.values(day.slots)) {
+      if (!slot || !slot.doctor) continue;
+      const cur = map.get(slot.doctor) ?? { total: 0, slots: 0 };
+      cur.total += slot.pay.total;
+      cur.slots += 1;
+      map.set(slot.doctor, cur);
+    }
+    return DOCTORS
+      .filter((d) => map.has(d))
+      .map((d) => ({ doctor: d, ...(map.get(d)!) }));
+  }, [day]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -62,13 +80,34 @@ export function ShiftDayPage() {
         </div>
       )}
 
+      {/* ─── Per-doctor day summary (instead of single-total card) ────── */}
       <aside className="rounded-2xl bg-violet-50 p-5 ring-1 ring-violet-200">
         <div className="text-xs font-semibold uppercase tracking-wide text-violet-700">
           สรุปเงิน{SHIFT_TYPE_LABEL[shiftType]}วันนี้
         </div>
-        <div className="mt-1 text-3xl font-bold text-violet-900 tabular-nums">
-          {fmtBaht(day?.total ?? 0)}
-        </div>
+        {perDoctor.length === 0 ? (
+          <div className="mt-3 text-sm text-violet-700/70">ยังไม่มีแพทย์ในเวรวันนี้</div>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {perDoctor.map(({ doctor, total, slots }) => (
+              <div
+                key={doctor}
+                className={`flex items-center justify-between rounded-xl bg-white/70 px-4 py-3 ring-1 ring-zinc-200 ${DOCTOR_BG_CLASS[doctor]}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: DOCTOR_COLOR_HEX[doctor] }} />
+                  <span className="font-semibold text-zinc-900">{doctor}</span>
+                  <span className="text-xs text-zinc-500">({slots} slot)</span>
+                </div>
+                <div className="text-xl font-bold text-zinc-900 tabular-nums">{fmtBaht(total)}</div>
+              </div>
+            ))}
+            <div className="flex items-center justify-between border-t border-violet-200 pt-2 text-sm font-semibold text-violet-900">
+              <span>รวมทั้งหมด</span>
+              <span className="tabular-nums">{fmtBaht(day?.total ?? 0)}</span>
+            </div>
+          </div>
+        )}
       </aside>
     </div>
   );

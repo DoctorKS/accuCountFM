@@ -1,11 +1,10 @@
 import { X } from "lucide-react";
 import { useMemo } from "react";
-import dayjs from "dayjs";
 import type { ShiftType, Slot } from "@/lib/constants";
 import { SLOTS } from "@/lib/constants";
 import { DOCTORS, DOCTOR_BG_CLASS, isDoctor, type Doctor } from "@/lib/doctors";
 import { useMonth, useSetAssignment } from "@/hooks/useShift";
-import { formatBEMonth, WEEKDAY_TH_SHORT, toThaiNumerals } from "@/lib/buddhist";
+import { formatBEMonth, WEEKDAY_TH_SHORT, daysInMonth } from "@/lib/buddhist";
 import { isOffHour } from "@/lib/calc";
 
 /**
@@ -24,7 +23,7 @@ export function VerifyDialog({ yearMonth, onClose }: { yearMonth: string; onClos
   const inMonth = useMonth("inHos", yearMonth);
   const setAssign = useSetAssignment();
 
-  const dim = dayjs(yearMonth + "-01").daysInMonth();
+  const dim = daysInMonth(yearMonth);
   const holidays = outMonth.data?.holidays ?? inMonth.data?.holidays ?? [];
 
   // Pre-index assignments by (shiftType, date, slot) for O(1) cell lookup.
@@ -89,14 +88,14 @@ export function VerifyDialog({ yearMonth, onClose }: { yearMonth: string; onClos
                   const isWeekend = dow === 0 || dow === 6;
                   const isHoliday = holidays.includes(d);
                   const rowTint =
-                    isHoliday ? "bg-rose-50/50" :
-                    isWeekend ? "bg-amber-50/50" :
+                    isHoliday ? "bg-rose-100/60" :
+                    isWeekend ? "bg-rose-50/60" :
                     "";
 
                   return (
                     <tr key={d} className={rowTint}>
-                      <td className="border border-zinc-200 px-2 py-1 text-center font-mono">
-                        <div className="font-semibold">{toThaiNumerals(d)}</div>
+                      <td className="border border-zinc-200 px-2 py-1 text-center">
+                        <div className="font-semibold tabular-nums">{d}</div>
                         <div className="text-[10px] text-zinc-400">{WEEKDAY_TH_SHORT[dow]}</div>
                         {isHoliday && <div className="text-[9px] text-rose-600">นักขัตฤกษ์</div>}
                       </td>

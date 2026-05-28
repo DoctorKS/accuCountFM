@@ -1,20 +1,15 @@
 import { useState } from "react";
 import { X, Plus } from "lucide-react";
-import dayjs from "dayjs";
 import { useHolidays, useAddHoliday, useRemoveHoliday } from "@/hooks/useShift";
-import { formatBEMonth, WEEKDAY_TH_SHORT, toThaiNumerals } from "@/lib/buddhist";
+import { formatBEMonth, WEEKDAY_TH_SHORT, daysInMonth, firstDowOfMonth } from "@/lib/buddhist";
 
 /**
  * Holiday picker — port of Shift_count's two-pane modal:
  *   Top    chip grid: existing holidays with X to delete + "+" tile to open calendar
  *   Bottom calendar grid: 7-col month, click a day to toggle holiday on/off
  *
- * Weekend days are tinted (red text) but NOT auto-flagged as holidays —
- * the off-hour rule already treats Sat/Sun as off-hour without needing an
- * explicit holiday entry. This dialog is for นักขัตฤกษ์ only.
- *
- * Optional `note` (เช่น "แรงงาน") set via a small input below the calendar;
- * applied to whichever day is added next. Empty note is fine.
+ * Weekend cells get the same light-red BG as holiday cells (consistent with
+ * the off-hour rule that already treats Sat/Sun as off-hour).
  */
 export function HolidayPickerDialog({ yearMonth, onClose }: { yearMonth: string; onClose: () => void }) {
   const holidays = useHolidays(yearMonth);
@@ -26,9 +21,8 @@ export function HolidayPickerDialog({ yearMonth, onClose }: { yearMonth: string;
   const days = new Set((holidays.data ?? []).map((h) => h.day));
   const noteByDay = new Map((holidays.data ?? []).map((h) => [h.day, h.note]));
 
-  const dt = dayjs(yearMonth + "-01");
-  const dim = dt.daysInMonth();
-  const startDow = dt.day(); // 0 = Sun
+  const dim = daysInMonth(yearMonth);
+  const startDow = firstDowOfMonth(yearMonth);
 
   function toggleDay(day: number) {
     if (days.has(day)) {
@@ -61,7 +55,7 @@ export function HolidayPickerDialog({ yearMonth, onClose }: { yearMonth: string;
                 className="group relative flex h-14 w-14 items-center justify-center rounded-xl bg-rose-50 text-base font-bold text-rose-700 ring-1 ring-rose-200"
                 title={h.note ?? `วันที่ ${h.day}`}
               >
-                <span className="leading-none">{toThaiNumerals(h.day)}</span>
+                <span className="tabular-nums leading-none">{h.day}</span>
                 {h.note && (
                   <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-white px-1.5 py-0.5 text-[9px] font-medium text-rose-600 ring-1 ring-rose-200">
                     {h.note}
@@ -101,38 +95,43 @@ export function HolidayPickerDialog({ yearMonth, onClose }: { yearMonth: string;
                 />
               </div>
               <div className="grid grid-cols-7 gap-1">
-                {WEEKDAY_TH_SHORT.map((dow) => (
-                  <div key={dow} className="py-1 text-center text-[10px] font-semibold text-zinc-500">{dow}</div>
+                {WEEKDAY_TH_SHORT.map((dow, i) => (
+                  <div
+                    key={dow}
+                    className={`py-1 text-center text-[10px] font-semibold ${i === 0 || i === 6 ? "text-rose-500" : "text-zinc-500"}`}
+                  >
+                    {dow}
+                  </div>
                 ))}
-                {Array.from({ length: startDow }, (_, i) => (
-                  <div key={`empty-${i}`} />
-                ))}
+                {Array.from({ length: startDow }, (_, i) => <div key={`empty-${i}`} />)}
                 {Array.from({ length: dim }, (_, i) => i + 1).map((d) => {
-                  const dow = dayjs(yearMonth + "-01").date(d).day();
+                  const dt = new Date(yearMonth + `-${String(d).padStart(2, "0")}T00:00:00Z`);
+                  const dow = dt.getUTCDay();
                   const isWeekend = dow === 0 || dow === 6;
                   const isHoliday = days.has(d);
                   const note = noteByDay.get(d);
+
+                  const cls = isHoliday
+                    ? "bg-rose-100 font-bold text-rose-700 ring-2 ring-rose-400"
+                    : isWeekend
+                      ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100"
+                      : "bg-zinc-50 text-zinc-700 ring-1 ring-zinc-200 hover:bg-violet-100";
+
                   return (
                     <button
                       key={d}
                       type="button"
                       onClick={() => toggleDay(d)}
                       title={isHoliday ? `คลิกเพื่อลบ${note ? ` (${note})` : ""}` : "คลิกเพื่อตั้งเป็นวันหยุด"}
-                      className={`aspect-square rounded-lg text-sm font-medium transition-colors ${
-                        isHoliday
-                          ? "bg-rose-100 font-bold text-rose-700 ring-1 ring-rose-300"
-                          : isWeekend
-                            ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                            : "bg-zinc-50 text-zinc-700 hover:bg-violet-100"
-                      }`}
+                      className={`aspect-square rounded-lg text-sm font-medium transition-colors tabular-nums ${cls}`}
                     >
-                      {toThaiNumerals(d)}
+                      {d}
                     </button>
                   );
                 })}
               </div>
               <p className="mt-2 text-[10px] text-zinc-400">
-                แตะวันเพื่อเปิด/ปิดวันนักขัตฤกษ์ · สีอำพันคือเสาร์-อาทิตย์ (ถือเป็นนอกเวลาอยู่แล้ว ไม่ต้องตั้ง)
+                แตะวันเพื่อเปิด/ปิดวันนักขัตฤกษ์ · เสาร์-อาทิตย์เป็นนอกเวลาอยู่แล้ว ไม่ต้องตั้ง
               </p>
             </div>
           )}

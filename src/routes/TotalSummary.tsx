@@ -9,6 +9,7 @@ import { fmtBaht } from "@/lib/utils";
 import { useMonth } from "@/hooks/useShift";
 import { computeMonthByDoctor } from "@/lib/calc-month";
 import { exportMonthXlsx, type ShiftBundle } from "@/lib/tauri";
+import { MonthYearPicker } from "@/components/ui/MonthYearPicker";
 import type { AssignmentRow, CaseRow } from "@/lib/db";
 import type { ShiftType } from "@/lib/constants";
 
@@ -101,15 +102,7 @@ export function TotalSummary({ mode }: { mode: Mode }) {
           <p className="mt-1 text-sm text-zinc-500">{formatBEMonth(ym + "-01")}</p>
         </div>
         <div className="flex items-end gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-zinc-500">เดือน / ปี</span>
-            <input
-              type="month"
-              value={ym}
-              onChange={(e) => setYm(e.target.value || currentYearMonth())}
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm"
-            />
-          </label>
+          <MonthYearPicker value={ym} onChange={setYm} />
           <button
             onClick={doExport}
             disabled={exporting || (outMonth.isLoading || inMonth.isLoading)}

@@ -1,16 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Upload, ChevronRight, ClipboardList } from "lucide-react";
-import dayjs from "dayjs";
 import { type ShiftType, SHIFT_TYPE_LABEL } from "@/lib/constants";
 import { DOCTORS, DOCTOR_BG_CLASS } from "@/lib/doctors";
-import { currentYearMonth, formatBEMonth, toThaiNumerals } from "@/lib/buddhist";
+import { currentYearMonth, formatBEMonth, daysInMonth, firstDowOfMonth, WEEKDAY_TH_SHORT } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
 import { useMonth } from "@/hooks/useShift";
 import { computeMonthByDoctor } from "@/lib/calc-month";
 import { OcrDialog } from "@/components/ocr/OcrDialog";
 import { VerifyDialog } from "@/components/verify/VerifyDialog";
 import { HolidayChips } from "@/components/shift/HolidayChips";
+import { MonthYearPicker } from "@/components/ui/MonthYearPicker";
 
 /** /out and /in — month picker, calendar grid, 4 doctor summary cards. */
 export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
@@ -27,8 +27,8 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
     return computeMonthByDoctor(shiftType, month.data.assignments, month.data.cases, month.data.holidays);
   }, [month.data, shiftType]);
 
-  // Day-status hint for the calendar grid: red dot if all 3 slots assigned;
-  // amber dot if 1-2 slots assigned; gray if 0.
+  // Day-status hint for the calendar grid: green dot when all 3 slots assigned;
+  // amber dot when 1-2; gray when 0.
   const dayStatus = useMemo(() => {
     const m = new Map<string, { assigned: number; cases: number }>();
     if (!month.data) return m;
@@ -45,7 +45,9 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
     return m;
   }, [month.data]);
 
-  const dim = dayjs(`${ym}-01`).daysInMonth();
+  const dim = daysInMonth(ym);
+  const startDow = firstDowOfMonth(ym);
+  const holidays = month.data?.holidays ?? [];
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -58,16 +60,7 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
       </div>
 
       <div className="flex items-end justify-between gap-4">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-zinc-500">เดือน / ปี</span>
-          <input
-            type="month"
-            value={ym}
-            onChange={(e) => setYm(e.target.value || currentYearMonth())}
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200"
-          />
-          <span className="mt-1 text-sm font-semibold text-zinc-700">{formatBEMonth(ym + "-01")}</span>
-        </label>
+        <MonthYearPicker value={ym} onChange={setYm} />
 
         <div className="flex gap-2">
           <button
@@ -94,7 +87,24 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-4">
         <div className="mb-3 text-sm font-semibold text-zinc-500">ปฏิทินรายวัน — {formatBEMonth(ym + "-01")}</div>
+
         <div className="grid grid-cols-7 gap-2">
+          {/* Weekday header row (Thai abbrevs) */}
+          {WEEKDAY_TH_SHORT.map((dow, i) => (
+            <div
+              key={dow}
+              className={`py-2 text-center text-xs font-semibold ${i === 0 || i === 6 ? "text-rose-500" : "text-zinc-500"}`}
+            >
+              {dow}
+            </div>
+          ))}
+
+          {/* Empty cells before day 1 */}
+          {Array.from({ length: startDow }, (_, i) => (
+            <div key={`empty-${i}`} aria-hidden />
+          ))}
+
+          {/* Day cells */}
           {Array.from({ length: dim }, (_, i) => i + 1).map((d) => {
             const date = `${ym}-${String(d).padStart(2, "0")}`;
             const status = dayStatus.get(date);
@@ -103,24 +113,30 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
             const dt = new Date(date + "T00:00:00Z");
             const dow = dt.getUTCDay();
             const isWeekend = dow === 0 || dow === 6;
-            const isHoliday = (month.data?.holidays ?? []).includes(d);
-            const baseBg =
-              isHoliday ? "bg-rose-50 border-rose-300" :
-              isWeekend ? "bg-amber-50 border-amber-200" :
-              "bg-zinc-50 border-zinc-200";
+            const isHoliday = holidays.includes(d);
+            // Both weekends + holidays get the light-red treatment.
+            // Holidays get a slightly stronger ring to differentiate.
+            const tileBg =
+              isHoliday ? "bg-rose-100 border-rose-300 hover:bg-rose-200" :
+              isWeekend ? "bg-rose-50 border-rose-200 hover:bg-rose-100" :
+              "bg-zinc-50 border-zinc-200 hover:bg-violet-50";
             return (
               <Link
                 key={d}
                 to={`/shift/${route}/${date}`}
-                className={`group relative rounded-lg border py-3 text-center text-sm font-medium text-zinc-700 hover:border-violet-300 hover:bg-violet-50 ${baseBg}`}
+                className={`group relative flex aspect-square flex-col items-center justify-center rounded-2xl border text-zinc-700 transition-colors ${tileBg}`}
                 title={isHoliday ? "วันหยุดนักขัตฤกษ์" : isWeekend ? "วันหยุดสุดสัปดาห์" : ""}
               >
-                <div className="text-base font-semibold">{toThaiNumerals(d)}</div>
-                <div className={`mx-auto mt-1 h-1.5 w-1.5 rounded-full ${dot}`} />
+                <div className="text-xl font-semibold tabular-nums">{d}</div>
+                <div className={`mt-1 h-1.5 w-1.5 rounded-full ${dot}`} />
                 {status && status.cases > 0 && (
-                  <div className="text-[10px] text-zinc-400 group-hover:text-violet-500">{toThaiNumerals(status.cases)} เคส</div>
+                  <div className="mt-0.5 text-[10px] tabular-nums text-zinc-500 group-hover:text-violet-600">
+                    {status.cases} เคส
+                  </div>
                 )}
-                {isHoliday && <div className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-rose-500" />}
+                {isHoliday && (
+                  <div className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-rose-500" />
+                )}
               </Link>
             );
           })}
