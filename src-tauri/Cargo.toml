@@ -38,8 +38,11 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 base64 = "0.22"
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "fs"] }
 
-# OS-keyring for API key (Windows Credential Manager backend)
-keyring = "3"
+# OS-keyring for API key — Windows Credential Manager backend.
+# keyring v3 changed all backends to opt-in: without `windows-native` you get
+# a NoOp backend that silently no-ops set_password — read-after-write would
+# return NoEntry. Always pin features explicitly here.
+keyring = { version = "3", features = ["windows-native"] }
 
 # Excel export
 rust_xlsxwriter = { version = "0.95", features = ["chrono"] }
