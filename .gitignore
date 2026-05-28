@@ -56,3 +56,8 @@ exports/
 # Claude/Codex working folders
 .claude/
 .codex/
+
+# Toolchain install artifacts (downloaded one-shot setup helpers)
+.tools/
+.rust_install.log
+.vs_bt_install.log
