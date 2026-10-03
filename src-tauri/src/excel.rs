@@ -24,8 +24,17 @@ pub struct ShiftBundle {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct AutopsyCount {
+    pub doctor_name: String,
+    pub cuts: u32,
+    pub non_cuts: u32,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportPayload {
+    #[serde(default)]
+    pub autopsy_counts: Vec<AutopsyCount>,
     pub year_month: String,
     pub save_path: String,
     #[serde(default)]
@@ -46,6 +55,8 @@ pub struct ExportResult {
 pub struct DoctorTotal {
     pub out_hos: f64,
     pub in_hos: f64,
+    pub surgery: f64,
+    pub legacy_non_cut: f64,
     pub total: f64,
 }
 
@@ -108,7 +119,7 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
 
     // ─── Sheet 2: cases ─────────────────────────────────────────────────────
     let sh2 = wb.add_worksheet().set_name("เคสชันสูตร").map_err(|e| e.to_string())?;
-    let h2 = ["วันที่", "ช่วงเวลา", "ประเภท", "เวลาออก", "เวลากลับ", "นาทีออก"];
+    let h2 = ["วันที่", "ช่วงเวลา", "ประเภท", "เวลาออก / เริ่มผ่า", "เวลากลับ / ผ่าเสร็จ", "นาทีหัก", "ชื่อ นามสกุล", "ชนิดเคส"];
     for (c, label) in h2.iter().enumerate() {
         sh2.write_with_format(0, c as u16, *label, &header_fmt).map_err(|e| e.to_string())?;
     }
@@ -122,12 +133,14 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
             sh2.write_with_format(row, 2, shift_type_str(c.shift_type), &center).map_err(|e| e.to_string())?;
             sh2.write_string(row, 3, c.leave_time.as_deref().unwrap_or("")).map_err(|e| e.to_string())?;
             sh2.write_string(row, 4, c.return_time.as_deref().unwrap_or("")).map_err(|e| e.to_string())?;
-            let mins = case_minutes(c.leave_time.as_deref(), c.return_time.as_deref());
+            let mins = if c.case_kind == "surgery" { 0 } else if c.shift_type == ShiftType::InHos { 10 } else { case_minutes(c.leave_time.as_deref(), c.return_time.as_deref()) };
+            sh2.write_string(row, 6, &c.case_name).map_err(|e| e.to_string())?;
+            sh2.write_string(row, 7, if c.case_kind == "surgery" { "ผ่าชันสูตร" } else { "ชันสูตร" }).map_err(|e| e.to_string())?;
             sh2.write_number(row, 5, mins as f64).map_err(|e| e.to_string())?;
             row += 1;
         }
     }
-    for (i, w) in [12.0, 14.0, 14.0, 12.0, 12.0, 10.0].iter().enumerate() {
+    for (i, w) in [12.0, 14.0, 14.0, 20.0, 20.0, 10.0, 28.0, 16.0].iter().enumerate() {
         sh2.set_column_width(i as u16, *w).ok();
     }
 
@@ -167,10 +180,12 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
             sh3.write_number(row, 7, cases_in_slot.len() as f64).map_err(|e| e.to_string())?;
             sh3.write_number_with_format(row, 8, pay.case_bonus, &money_fmt).map_err(|e| e.to_string())?;
             sh3.write_number_with_format(row, 9, pay.total, &money_fmt).map_err(|e| e.to_string())?;
+            let surgery = cases_in_slot.iter().filter(|c| c.case_kind == "surgery").count() as f64 * 4500.0;
             if let Some(t) = totals.get_mut(&doc) {
+                t.surgery += surgery;
                 match a.shift_type {
-                    ShiftType::OutHos => t.out_hos += pay.total,
-                    ShiftType::InHos => t.in_hos += pay.total,
+                    ShiftType::OutHos => t.out_hos += pay.total - surgery,
+                    ShiftType::InHos => t.in_hos += pay.total - surgery,
                 }
                 t.total += pay.total;
             }
@@ -181,10 +196,19 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
         sh3.set_column_width(i as u16, *w).ok();
     }
 
+    for count in &payload.autopsy_counts {
+        if let Some(t) = totals.get_mut(&count.doctor_name) {
+            let surgery = count.cuts as f64 * 4500.0;
+            let non_cut = count.non_cuts as f64 * 2250.0;
+            t.surgery += surgery;
+            t.legacy_non_cut += non_cut;
+            t.total += surgery + non_cut;
+        }
+    }
     // ─── Sheet 4: doctor totals ─────────────────────────────────────────────
     let sh4 = wb.add_worksheet().set_name("สรุปรวม").map_err(|e| e.to_string())?;
     sh4.write_with_format(0, 0, format!("เดือน {}", payload.year_month), &header_fmt).map_err(|e| e.to_string())?;
-    let h4 = ["แพทย์", "ชันสูตรนอก", "ชันสูตรใน", "รวม"];
+    let h4 = ["แพทย์", "ชันสูตรนอก", "ชันสูตรใน", "ค่าผ่าชันสูตร", "ผ่าไม่ตัดเนื้อเดิม", "รวม"];
     for (c, label) in h4.iter().enumerate() {
         sh4.write_with_format(2, c as u16, *label, &header_fmt).map_err(|e| e.to_string())?;
     }
@@ -194,17 +218,21 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
         sh4.write_string(row, 0, name).map_err(|e| e.to_string())?;
         sh4.write_number_with_format(row, 1, t.out_hos, &money_fmt).map_err(|e| e.to_string())?;
         sh4.write_number_with_format(row, 2, t.in_hos, &money_fmt).map_err(|e| e.to_string())?;
-        sh4.write_number_with_format(row, 3, t.total, &money_fmt).map_err(|e| e.to_string())?;
+        sh4.write_number_with_format(row, 3, t.surgery, &money_fmt).map_err(|e| e.to_string())?;
+        sh4.write_number_with_format(row, 4, t.legacy_non_cut, &money_fmt).map_err(|e| e.to_string())?;
+        sh4.write_number_with_format(row, 5, t.total, &money_fmt).map_err(|e| e.to_string())?;
         row += 1;
     }
     sh4.write_with_format(row, 0, "รวมทั้งหมด", &header_fmt).map_err(|e| e.to_string())?;
     let sum_out: f64 = DOCTORS.iter().map(|n| totals.get(*n).map(|t| t.out_hos).unwrap_or(0.0)).sum();
     let sum_in: f64 = DOCTORS.iter().map(|n| totals.get(*n).map(|t| t.in_hos).unwrap_or(0.0)).sum();
-    let sum_all: f64 = sum_out + sum_in;
+    let sum_all: f64 = totals.values().map(|t| t.total).sum();
     sh4.write_number_with_format(row, 1, sum_out, &money_fmt).map_err(|e| e.to_string())?;
     sh4.write_number_with_format(row, 2, sum_in, &money_fmt).map_err(|e| e.to_string())?;
-    sh4.write_number_with_format(row, 3, sum_all, &money_fmt).map_err(|e| e.to_string())?;
-    for (i, w) in [14.0, 16.0, 16.0, 16.0].iter().enumerate() {
+    sh4.write_number_with_format(row, 3, totals.values().map(|t| t.surgery).sum::<f64>(), &money_fmt).map_err(|e| e.to_string())?;
+    sh4.write_number_with_format(row, 4, totals.values().map(|t| t.legacy_non_cut).sum::<f64>(), &money_fmt).map_err(|e| e.to_string())?;
+    sh4.write_number_with_format(row, 5, sum_all, &money_fmt).map_err(|e| e.to_string())?;
+    for (i, w) in [14.0, 16.0, 16.0, 18.0, 20.0, 16.0].iter().enumerate() {
         sh4.set_column_width(i as u16, *w).ok();
     }
 
@@ -214,4 +242,38 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
         path: payload.save_path.clone(),
         doctor_totals: totals,
     })
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn exported_surgery_and_legacy_adjustments_match_summary() {
+        let path = std::env::temp_dir().join(format!("accucountfm-export-test-{}.xlsx", std::process::id()));
+        let payload: ExportPayload = serde_json::from_value(serde_json::json!({
+            "yearMonth": "2026-05", "savePath": path.to_string_lossy(), "holidays": [],
+            "autopsyCounts": [{ "doctor_name": "กนก", "cuts": 1, "non_cuts": 1 }],
+            "outHos": {
+                "assignments": [{ "shiftType": "outHos", "date": "2026-05-12", "slot": "0800-1600", "doctorName": "กนก" }],
+                "cases": [
+                    { "shiftType": "outHos", "date": "2026-05-12", "slot": "0800-1600", "caseKind": "surgery", "caseName": "ชื่อ นามสกุล", "leaveTime": "08:00", "returnTime": "16:00" },
+                    { "shiftType": "outHos", "date": "2026-05-12", "slot": "0800-1600", "leaveTime": "09:00", "returnTime": "09:30" }
+                ]
+            },
+            "inHos": {
+                "assignments": [{ "shiftType": "inHos", "date": "2026-05-12", "slot": "0800-1600", "doctorName": "กนก" }],
+                "cases": [{ "shiftType": "inHos", "date": "2026-05-12", "slot": "0800-1600", "leaveTime": null, "returnTime": null }]
+            }
+        })).unwrap();
+        let result = write_workbook(&payload).unwrap();
+        let total = &result.doctor_totals["กนก"];
+        assert_eq!(total.out_hos, 1800.0);
+        assert_eq!(total.in_hos, 1200.0);
+        assert_eq!(total.surgery, 9000.0);
+        assert_eq!(total.legacy_non_cut, 2250.0);
+        assert_eq!(total.total, 14250.0);
+        assert!(path.metadata().unwrap().len() > 0);
+        std::fs::remove_file(path).unwrap();
+    }
 }

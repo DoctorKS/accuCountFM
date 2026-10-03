@@ -7,6 +7,7 @@
  *   ['holidays', ym]                      → standalone holiday list (cross shift_type)
  *   ['slot-cases', shiftType, date, slot] → individual slot cases (rarely used standalone)
  */
+import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   listMonthAssignments,
@@ -72,6 +73,7 @@ export function useSlotCases(shiftType: ShiftType, date: string, slot: Slot) {
 export function useSetAssignment() {
   const qc = useQueryClient();
   return useMutation({
+    onError: error => toast.error("บันทึกล้มเหลว: " + String(error)),
     mutationFn: ({ shiftType, date, slot, doctorName }: {
       shiftType: ShiftType; date: string; slot: Slot; doctorName: Doctor | null;
     }) => setAssignmentDoctor(shiftType, date, slot, doctorName),
@@ -85,9 +87,10 @@ export function useSetAssignment() {
 export function useAddCase() {
   const qc = useQueryClient();
   return useMutation({
+    onError: error => toast.error("บันทึกล้มเหลว: " + String(error)),
     mutationFn: ({ shiftType, date, slot, init }: {
       shiftType: ShiftType; date: string; slot: Slot;
-      init?: { caseName?: string; leaveTime?: string | null; returnTime?: string | null };
+      init?: { caseName?: string; leaveTime?: string | null; returnTime?: string | null; caseKind?: "examination" | "surgery" };
     }) => addCase(shiftType, date, slot, init),
     onSuccess: (_, vars) => {
       const ym = vars.date.slice(0, 7);
@@ -100,7 +103,8 @@ export function useAddCase() {
 export function useUpdateCase() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, patch }: { id: number; patch: Partial<Pick<CaseRow, "case_name" | "leave_time" | "return_time">> }) =>
+    onError: error => toast.error("บันทึกล้มเหลว: " + String(error)),
+    mutationFn: ({ id, patch }: { id: number; patch: Partial<Pick<CaseRow, "case_name" | "leave_time" | "return_time" | "shift_type">> }) =>
       updateCase(id, patch),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["month"] });
@@ -112,6 +116,7 @@ export function useUpdateCase() {
 export function useDeleteCase() {
   const qc = useQueryClient();
   return useMutation({
+    onError: error => toast.error("บันทึกล้มเหลว: " + String(error)),
     mutationFn: (id: number) => deleteCase(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["month"] });
@@ -123,6 +128,7 @@ export function useDeleteCase() {
 export function useAddHoliday() {
   const qc = useQueryClient();
   return useMutation({
+    onError: error => toast.error("บันทึกล้มเหลว: " + String(error)),
     mutationFn: ({ yearMonth, day, note }: { yearMonth: string; day: number; note?: string }) =>
       addHoliday(yearMonth, day, note),
     onSuccess: (_, vars) => {
@@ -146,6 +152,7 @@ export function useAutopsyCounts(yearMonth: string) {
 export function useUpsertAutopsyCount() {
   const qc = useQueryClient();
   return useMutation({
+    onError: error => toast.error("บันทึกล้มเหลว: " + String(error)),
     mutationFn: ({ yearMonth, doctorName, patch }: {
       yearMonth: string;
       doctorName: string;
@@ -160,6 +167,7 @@ export function useUpsertAutopsyCount() {
 export function useRemoveHoliday() {
   const qc = useQueryClient();
   return useMutation({
+    onError: error => toast.error("บันทึกล้มเหลว: " + String(error)),
     mutationFn: ({ yearMonth, day }: { yearMonth: string; day: number }) =>
       removeHoliday(yearMonth, day),
     onSuccess: (_, vars) => {
@@ -168,4 +176,18 @@ export function useRemoveHoliday() {
       qc.invalidateQueries({ queryKey: ["month", "inHos", vars.yearMonth] });
     },
   });
+}
+
+export function useMergedMonth(yearMonth: string) {
+  const out = useMonth("outHos", yearMonth);
+  const inn = useMonth("inHos", yearMonth);
+  return {
+    isLoading: out.isLoading || inn.isLoading,
+    error: out.error ?? inn.error,
+    data: out.data && inn.data ? {
+      assignments: [...out.data.assignments, ...inn.data.assignments],
+      cases: [...out.data.cases, ...inn.data.cases].sort((a,b) => a.position - b.position || a.id - b.id),
+      holidays: out.data.holidays,
+    } : undefined,
+  };
 }

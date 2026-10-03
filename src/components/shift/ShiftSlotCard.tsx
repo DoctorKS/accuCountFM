@@ -3,6 +3,7 @@ import type { Slot, ShiftType } from "@/lib/constants";
 import { SLOT_LABEL } from "@/lib/constants";
 import { DOCTORS, type Doctor, isDoctor } from "@/lib/doctors";
 import { CaseRow } from "./CaseRow";
+import { isOffHour } from "@/lib/calc";
 import { useSetAssignment } from "@/hooks/useShift";
 import type { CaseRow as CaseRowT } from "@/lib/db";
 import type { SlotComputed } from "@/lib/calc-month";
@@ -20,8 +21,11 @@ import type { SlotComputed } from "@/lib/calc-month";
  */
 export function ShiftSlotCard({
   shiftType, date, slot, assignedDoctor, cases, computed,
-  focusCaseId, onAddCase,
+  focusCaseId, onAddCase, onAddSurgery, inDoctor, holidays,
 }: {
+  inDoctor: Doctor | null;
+  holidays: number[];
+  onAddSurgery: () => void;
   shiftType: ShiftType;
   date: string;
   slot: Slot;
@@ -35,7 +39,7 @@ export function ShiftSlotCard({
 
   return (
     <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-      <header className="mb-4 flex items-center justify-between">
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">{SLOT_LABEL[slot]}</h2>
           {computed?.pay.offHour && (
@@ -44,23 +48,25 @@ export function ShiftSlotCard({
             </span>
           )}
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <span className="text-zinc-500">ชื่อแพทย์</span>
-          <select
-            value={assignedDoctor ?? ""}
-            onChange={(e) => {
-              const v = e.target.value;
-              const nextDoctor: Doctor | null = isDoctor(v) ? v : null;
-              setAssign.mutate({ shiftType, date, slot, doctorName: nextDoctor });
-            }}
-            className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-200"
-          >
-            <option value="">—</option>
-            {DOCTORS.map((d) => (<option key={d} value={d}>{d}</option>))}
-          </select>
-        </label>
+        <div className="flex flex-wrap gap-3">
+          {(["outHos", "inHos"] as const).map(type => {
+            const value = type === "outHos" ? assignedDoctor : inDoctor;
+            const other = type === "outHos" ? inDoctor : assignedDoctor;
+            return <label key={type} className="flex items-center gap-2 text-sm">
+              <span className="text-zinc-500">{type === "outHos" ? "แพทย์ชันสูตรนอก" : "แพทย์ชันสูตรใน"}</span>
+              <select value={value ?? ""} disabled={setAssign.isPending}
+                onChange={e => setAssign.mutate({ shiftType: type, date, slot, doctorName: isDoctor(e.target.value) ? e.target.value : null })}
+                className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm">
+                <option value="">—</option>
+                {DOCTORS.map(d => <option key={d} value={d} disabled={isOffHour(date, slot, holidays) && d === other}>{d}</option>)}
+              </select>
+            </label>;
+          })}
+        </div>
       </header>
 
+      {assignedDoctor && assignedDoctor === inDoctor && isOffHour(date, slot, holidays) &&
+        <p role="alert" className="mb-3 text-xs text-rose-600">ตารางเดิมมีแพทย์ซ้ำทั้งสองประเภทนอกเวลาราชการ กรุณาแก้แพทย์ก่อนใช้งานยอดสรุป</p>}
       <div className="space-y-2">
         {cases.length === 0 ? (
           <p className="text-xs text-zinc-400">ยังไม่มีเคส</p>
@@ -77,7 +83,7 @@ export function ShiftSlotCard({
         )}
       </div>
 
-      <div className="mt-3">
+      <div className="mt-3 flex gap-2">
         <button
           type="button"
           onClick={onAddCase}
@@ -85,7 +91,11 @@ export function ShiftSlotCard({
         >
           <Plus className="h-3 w-3" /> เพิ่มเคสชันสูตร
         </button>
+        <button type="button" onClick={onAddSurgery} className="inline-flex items-center gap-1.5 rounded-lg bg-[#455766] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90">
+          <Plus className="h-3 w-3" /> เพิ่มเคสผ่า
+        </button>
       </div>
+      {setAssign.error && <p role="alert" className="mt-2 text-xs text-rose-600">บันทึกล้มเหลว: {String(setAssign.error)}</p>}
     </article>
   );
 }

@@ -3,7 +3,8 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { Upload, X, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ocrRun, hasApiKey, type OcrResult, type OcrSlot } from "@/lib/tauri";
-import { setAssignmentDoctor } from "@/lib/db";
+import { isOffHour } from "@/lib/calc";
+import { setAssignmentDoctor, listMonthHolidays } from "@/lib/db";
 import { isDoctor, DOCTOR_BG_CLASS, type Doctor } from "@/lib/doctors";
 import type { Slot } from "@/lib/constants";
 import { useQueryClient } from "@tanstack/react-query";
@@ -66,10 +67,22 @@ export function OcrDialog({ yearMonth, onClose }: { yearMonth: string; onClose: 
     if (!result) return;
     setBusy("apply");
     try {
+      const holidays = (await listMonthHolidays(yearMonth)).map(h => h.day);
+      for (const d of result.days) {
+        const date = `${yearMonth}-${String(d.date).padStart(2, "0")}`;
+        for (const [slot, cell] of Object.entries(d.shifts) as [Slot, OcrSlot][]) {
+          if (isDoctor(cell.outHos) && cell.outHos === cell.inHos && isOffHour(date, slot, holidays)) {
+            throw new Error(`${date} ${slot}: แพทย์อยู่เวรสองประเภทพร้อมกันได้เฉพาะในเวลาราชการ`);
+          }
+        }
+      }
       // Sequential upserts — ~31 days × 3 slots × 2 types = ~186 ops, fine.
       for (const d of result.days) {
         const date = `${yearMonth}-${String(d.date).padStart(2, "0")}`;
         for (const [slot, cell] of Object.entries(d.shifts) as [Slot, OcrSlot][]) {
+          // Clear the pair first so swapping two doctors cannot hit an old assignment.
+          await setAssignmentDoctor("outHos", date, slot, null);
+          await setAssignmentDoctor("inHos", date, slot, null);
           await setAssignmentDoctor("outHos", date, slot, isDoctor(cell.outHos) ? cell.outHos : null);
           await setAssignmentDoctor("inHos", date, slot, isDoctor(cell.inHos) ? cell.inHos : null);
         }

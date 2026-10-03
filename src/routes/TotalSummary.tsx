@@ -26,7 +26,7 @@ function toBundle(shiftType: ShiftType, assignments: AssignmentRow[], cases: Cas
       shiftType, date: a.date, slot: a.slot, doctorName: a.doctor_name,
     })),
     cases: cases.map((c) => ({
-      shiftType, date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time,
+      shiftType, caseKind: c.case_kind, caseName: c.case_name, date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time,
     })),
   };
 }
@@ -87,20 +87,25 @@ export function TotalSummary({ mode }: { mode: Mode }) {
     const inn = inByDoctor.get(d);
     const ap = autopsyByDoctor.get(d) ?? { cuts: 0, non_cuts: 0 };
     const shiftHourPay = (out?.offHourBaseTotal ?? 0) + (inn?.offHourBaseTotal ?? 0);
+    const surgeryCount = (data: typeof outMonth.data) => data?.cases.filter(c => c.case_kind === "surgery" && data.assignments.some(a => a.date === c.date && a.slot === c.slot && a.doctor_name === d)).length ?? 0;
+    const outSurgery = surgeryCount(outMonth.data) * AUTOPSY_CUT_RATE;
+    const inSurgery = surgeryCount(inMonth.data) * AUTOPSY_CUT_RATE;
     const cutPay = ap.cuts * AUTOPSY_CUT_RATE;
+    const surgeryPay = cutPay + outSurgery + inSurgery;
     const nonCutPay = ap.non_cuts * AUTOPSY_NON_CUT_RATE;
-    const bonusPlusAutopsy = (out?.bonusTotal ?? 0) + (inn?.bonusTotal ?? 0) + cutPay + nonCutPay;
+    const bonusPlusAutopsy = (out?.bonusTotal ?? 0) + (inn?.bonusTotal ?? 0) - outSurgery - inSurgery + nonCutPay;
     return {
       doctor: d,
       cuts: ap.cuts,
       nonCuts: ap.non_cuts,
       shiftHourPay,
       bonusPlusAutopsy,
-      outTotal: out?.total ?? 0,
-      inTotal: inn?.total ?? 0,
-      grand: shiftHourPay + bonusPlusAutopsy,
+      surgeryPay,
+      outTotal: (out?.total ?? 0) - outSurgery,
+      inTotal: (inn?.total ?? 0) - inSurgery,
+      grand: shiftHourPay + bonusPlusAutopsy + surgeryPay,
     };
-  }), [outByDoctor, inByDoctor, autopsyByDoctor]);
+  }), [outByDoctor, inByDoctor, autopsyByDoctor, outMonth.data, inMonth.data]);
 
   async function doExport() {
     setExporting(true);
@@ -116,6 +121,7 @@ export function TotalSummary({ mode }: { mode: Mode }) {
         yearMonth: ym,
         savePath,
         holidays,
+        autopsyCounts: autopsy.data ?? [],
         outHos: outMonth.data ? toBundle("outHos", outMonth.data.assignments, outMonth.data.cases) : null,
         inHos: inMonth.data ? toBundle("inHos", inMonth.data.assignments, inMonth.data.cases) : null,
       });
@@ -137,7 +143,7 @@ export function TotalSummary({ mode }: { mode: Mode }) {
           <MonthYearPicker value={ym} onChange={setYm} />
           <button
             onClick={doExport}
-            disabled={exporting || (outMonth.isLoading || inMonth.isLoading)}
+            disabled={exporting || outMonth.isLoading || inMonth.isLoading || autopsy.isLoading || !outMonth.data || !inMonth.data || !!autopsy.error}
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
           >
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -146,6 +152,8 @@ export function TotalSummary({ mode }: { mode: Mode }) {
         </div>
       </header>
 
+      {mode === "all" && <p className="text-xs text-zinc-500">เคสผ่ารายวันรวมอัตโนมัติในค่าผ่าชันสูตร · ช่องผ่าเดิมใช้เฉพาะยอดที่เคยบันทึกแยก กรุณาไม่กรอกเคสรายวันซ้ำ</p>}
+      {(outMonth.error || inMonth.error || autopsy.error) && <p role="alert" className="text-sm text-rose-600">โหลดข้อมูลล้มเหลว: {String(outMonth.error ?? inMonth.error ?? autopsy.error)}</p>}
       {mode === "all"
         ? <AllTable rows={rows} yearMonth={ym} />
         : <SimpleTable
@@ -168,6 +176,7 @@ function AllTable({ rows, yearMonth }: {
     nonCuts: number;
     shiftHourPay: number;
     bonusPlusAutopsy: number;
+    surgeryPay: number;
     outTotal: number;
     inTotal: number;
     grand: number;
@@ -175,17 +184,18 @@ function AllTable({ rows, yearMonth }: {
   yearMonth: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+    <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm">
       <table className="w-full text-sm">
         <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
           <tr>
             <th className="px-3 py-3 text-left">แพทย์</th>
-            <th className="px-3 py-3 text-center">ผ่า</th>
+            <th className="px-3 py-3 text-center">ผ่าเดิม</th>
             <th className="px-3 py-3 text-center">ผ่าไม่ตัดเนื้อ</th>
             <th className="px-3 py-3 text-right">ค่าชม.เวรนอกเวลา</th>
-            <th className="px-3 py-3 text-right">ค่าผ่า+ชันสูตร</th>
+            <th className="px-3 py-3 text-right">ค่าชันสูตร + ผ่าไม่ตัดเนื้อ</th>
             <th className="px-3 py-3 text-right">ค่าเวรชันสูตรนอก</th>
             <th className="px-3 py-3 text-right">ค่าเวรชันสูตรใน</th>
+            <th className="px-3 py-3 text-right">ค่าผ่าชันสูตร</th>
             <th className="px-3 py-3 text-right">รวม</th>
           </tr>
         </thead>
@@ -208,6 +218,7 @@ function AllTable({ rows, yearMonth }: {
               <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(r.bonusPlusAutopsy)}</td>
               <td className="px-3 py-3 text-right tabular-nums text-violet-700">{fmtBaht(r.outTotal)}</td>
               <td className="px-3 py-3 text-right tabular-nums text-emerald-700">{fmtBaht(r.inTotal)}</td>
+              <td className="px-3 py-3 text-right tabular-nums text-[#455766]">{fmtBaht(r.surgeryPay)}</td>
               <td className="px-3 py-3 text-right font-bold tabular-nums">{fmtBaht(r.grand)}</td>
             </tr>
           ))}
@@ -219,6 +230,7 @@ function AllTable({ rows, yearMonth }: {
             <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(sum(rows, "bonusPlusAutopsy"))}</td>
             <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(sum(rows, "outTotal"))}</td>
             <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(sum(rows, "inTotal"))}</td>
+            <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(sum(rows, "surgeryPay"))}</td>
             <td className="px-3 py-3 text-right tabular-nums text-violet-900">{fmtBaht(sum(rows, "grand"))}</td>
           </tr>
         </tfoot>
@@ -296,7 +308,7 @@ function SimpleTable({ rows, mode, yearMonth, assignments, cases }: {
       }
     }
     const m = new Map<Doctor, CaseRow[]>();
-    for (const c of cases) {
+    for (const c of cases.filter(c => c.case_kind !== "surgery")) {
       const d = slotToDoctor.get(`${c.date}|${c.slot}`);
       if (!d) continue;
       const arr = m.get(d) ?? [];
@@ -308,12 +320,12 @@ function SimpleTable({ rows, mode, yearMonth, assignments, cases }: {
 
   return (
     <>
-      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
             <tr>
               <th className="px-4 py-3 text-left">แพทย์</th>
-              <th className="px-4 py-3 text-center">CS</th>
+              <th className="px-4 py-3 text-center">เคสชันสูตร</th>
               <th className="px-4 py-3 text-right">{colLabel}</th>
               <th className="px-4 py-3 text-right">แจกแจง</th>
             </tr>

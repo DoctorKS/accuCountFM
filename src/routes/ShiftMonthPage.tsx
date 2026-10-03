@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Upload, ChevronRight, ClipboardList } from "lucide-react";
-import { type ShiftType, SHIFT_TYPE_LABEL } from "@/lib/constants";
+import { Upload, ChevronRight, ClipboardList } from "lucide-react";
+import { type ShiftType } from "@/lib/constants";
 import { DOCTORS, DOCTOR_BG_CLASS } from "@/lib/doctors";
 import { currentYearMonth, formatBEMonth, daysInMonth, firstDowOfMonth, WEEKDAY_TH_SHORT } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
-import { useMonth } from "@/hooks/useShift";
+import { useMergedMonth } from "@/hooks/useShift";
 import { computeMonthByDoctor } from "@/lib/calc-month";
 import { OcrDialog } from "@/components/ocr/OcrDialog";
 import { VerifyDialog } from "@/components/verify/VerifyDialog";
@@ -30,7 +30,7 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
 
   const [ocrOpen, setOcrOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
-  const title = SHIFT_TYPE_LABEL[shiftType];
+  const title = "เวรชันสูตร";
   const route = shiftType === "outHos" ? "out" : "in";
   const navigate = useNavigate();
 
@@ -54,11 +54,13 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [navigate, ocrOpen, verifyOpen]);
 
-  const month = useMonth(shiftType, ym);
+  const month = useMergedMonth(ym);
 
   const summary = useMemo(() => {
     if (!month.data) return null;
-    return computeMonthByDoctor(shiftType, month.data.assignments, month.data.cases, month.data.holidays);
+    const out = computeMonthByDoctor("outHos", month.data.assignments, month.data.cases, month.data.holidays);
+    const inn = computeMonthByDoctor("inHos", month.data.assignments, month.data.cases, month.data.holidays);
+    return out.map(s => ({ ...s, total: s.total + (inn.find(i => i.doctor === s.doctor)?.total ?? 0) }));
   }, [month.data, shiftType]);
 
   const dayStatus = useMemo(() => {
@@ -84,13 +86,7 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-6">
       <div className="flex items-center justify-between">
-        <Link to="/" className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-900">
-          <ArrowLeft className="h-4 w-4" /> กลับหน้าหลัก
-        </Link>
-        <h1 className="text-2xl font-bold">{title}</h1>
-        <div className="w-32 text-right text-[10px] text-zinc-400">
-          กด PageDown เพื่อกลับ
-        </div>
+        <h1 className="text-2xl font-bold">ตารางเวร</h1>
       </div>
 
       <div className="flex items-end justify-between gap-4">
@@ -143,7 +139,7 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
               const date = `${ym}-${String(d).padStart(2, "0")}`;
               const status = dayStatus.get(date);
               const filled = status ? status.assigned : 0;
-              const dot = filled === 3 ? "bg-emerald-500" : filled > 0 ? "bg-amber-400" : "bg-zinc-200";
+              const dot = filled === 6 ? "bg-emerald-500" : filled > 0 ? "bg-amber-400" : "bg-zinc-200";
               const dt = new Date(date + "T00:00:00Z");
               const dow = dt.getUTCDay();
               const isWeekend = dow === 0 || dow === 6;
@@ -191,7 +187,7 @@ export function ShiftMonthPage({ shiftType }: { shiftType: ShiftType }) {
                   <div className="text-lg font-bold text-zinc-900 tabular-nums">{fmtBaht(ds?.total ?? 0)}</div>
                 </div>
                 <Link
-                  to={`/breakdown/${route}/${encodeURIComponent(d)}/${ym}`}
+                  to={`/breakdown/all/${encodeURIComponent(d)}/${ym}`}
                   className="ml-2 inline-flex items-center gap-0.5 rounded-md bg-white/70 px-2 py-1 text-[10px] font-medium text-zinc-700 ring-1 ring-zinc-200 hover:bg-white"
                 >
                   แจกแจง <ChevronRight className="h-3 w-3" />

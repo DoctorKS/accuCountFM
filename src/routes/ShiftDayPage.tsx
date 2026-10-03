@@ -2,10 +2,10 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { SLOTS, SHIFT_TYPE_LABEL, type ShiftType, type Slot, CASE_BONUS_OUT_HOS, CASE_BONUS_IN_HOS } from "@/lib/constants";
+import { SLOTS, type ShiftType, type Slot, CASE_BONUS_OUT_HOS, CASE_BONUS_IN_HOS } from "@/lib/constants";
 import { formatBEFullDate } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
-import { useMonth, useAddCase } from "@/hooks/useShift";
+import { useMergedMonth, useAddCase } from "@/hooks/useShift";
 import { computeDay } from "@/lib/calc-month";
 import { ShiftSlotCard } from "@/components/shift/ShiftSlotCard";
 import { SlotBreakdownCard } from "@/components/shift/SlotBreakdownCard";
@@ -26,13 +26,16 @@ export function ShiftDayPage() {
   const shiftType: ShiftType = type === "in" ? "inHos" : "outHos";
   const ym = date ? date.slice(0, 7) : "";
   const backTo = `${type === "in" ? "/in" : "/out"}${ym ? `?ym=${ym}` : ""}`;
-  const caseRate = shiftType === "outHos" ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS;
 
-  const month = useMonth(shiftType, ym);
+  const month = useMergedMonth(ym);
   const day = useMemo(() => {
     if (!month.data || !date) return null;
-    return computeDay(shiftType, date, month.data.assignments, month.data.cases, month.data.holidays);
+    return computeDay("outHos", date, month.data.assignments, month.data.cases, month.data.holidays);
   }, [month.data, shiftType, date]);
+
+  const inDay = useMemo(() => month.data && date
+    ? computeDay("inHos", date, month.data.assignments, month.data.cases, month.data.holidays) : null,
+    [month.data, date]);
 
   /**
    * Spawn-and-focus state, lifted up so F1-F3 shortcuts can target any
@@ -40,13 +43,15 @@ export function ShiftDayPage() {
    */
   const [focusCaseId, setFocusCaseId] = useState<number | null>(null);
   const addCase = useAddCase();
-  const addCaseToSlot = useCallback((slot: Slot) => {
+  const addCaseToSlot = useCallback((slot: Slot, surgery = false) => {
     if (!date) return;
     addCase.mutate(
-      { shiftType, date, slot },
+      { shiftType: !month.data?.assignments.some(a => a.shift_type === "outHos" && a.date === date && a.slot === slot && a.doctor_name)
+          && month.data?.assignments.some(a => a.shift_type === "inHos" && a.date === date && a.slot === slot && a.doctor_name) ? "inHos" : "outHos", date, slot,
+        init: { caseKind: surgery ? "surgery" : "examination" } },
       { onSuccess: (newId) => setFocusCaseId(newId) },
     );
-  }, [date, shiftType, addCase]);
+  }, [date, shiftType, addCase, month.data]);
 
   /**
    * Guard the "back" action: any incomplete case (missing CS / leave / return)
@@ -58,7 +63,7 @@ export function ShiftDayPage() {
       document.activeElement.blur();
     }
     if (!month.data || !date) return true;
-    const todays = month.data.cases.filter((c) => c.date === date);
+    const todays = month.data!.cases.filter((c) => c.date === date);
     const incomplete = findIncompleteCases(todays, shiftType);
     if (incomplete.length > 0) {
       toast.error("กรุณากรอกข้อมูลให้ครบ");
@@ -105,7 +110,7 @@ export function ShiftDayPage() {
   const perDoctor = useMemo(() => {
     if (!day) return [] as { doctor: Doctor; total: number; slots: number }[];
     const map = new Map<Doctor, { total: number; slots: number }>();
-    for (const slot of Object.values(day.slots)) {
+    for (const slot of [...Object.values(day.slots), ...Object.values(inDay?.slots ?? {})]) {
       if (!slot || !slot.doctor) continue;
       const cur = map.get(slot.doctor) ?? { total: 0, slots: 0 };
       cur.total += slot.pay.total;
@@ -115,7 +120,7 @@ export function ShiftDayPage() {
     return DOCTORS
       .filter((d) => map.has(d))
       .map((d) => ({ doctor: d, ...(map.get(d)!) }));
-  }, [day]);
+  }, [day, inDay]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -128,7 +133,6 @@ export function ShiftDayPage() {
           <ArrowLeft className="h-4 w-4" /> กลับไปหน้าก่อน
         </Link>
         <div className="text-center">
-          <div className="text-xs text-zinc-500">{SHIFT_TYPE_LABEL[shiftType]}</div>
           <h1 className="text-xl font-bold">{date ? formatBEFullDate(date) : "—"}</h1>
         </div>
         <div className="w-44 text-right text-[10px] text-zinc-400 leading-tight">
@@ -145,9 +149,9 @@ export function ShiftDayPage() {
           {/* ─── Left column: input cards ───────────────────────────────── */}
           <div className="space-y-4 lg:col-span-8">
             {SLOTS.map((slot: Slot) => {
-              const assignment = month.data.assignments.find((a) => a.date === date && a.slot === slot);
+              const assignment = month.data!.assignments.find((a) => a.shift_type === "outHos" && a.date === date && a.slot === slot);
               const doctor = assignment?.doctor_name && isDoctor(assignment.doctor_name) ? assignment.doctor_name : null;
-              const cases = month.data.cases.filter((c) => c.date === date && c.slot === slot);
+              const cases = month.data!.cases.filter((c) => c.date === date && c.slot === slot);
               return (
                 <ShiftSlotCard
                   key={slot}
@@ -155,6 +159,9 @@ export function ShiftDayPage() {
                   date={date}
                   slot={slot}
                   assignedDoctor={doctor}
+                  inDoctor={month.data!.assignments.find(a => a.shift_type === "inHos" && a.date === date && a.slot === slot)?.doctor_name ?? null}
+                  holidays={month.data!.holidays}
+                  onAddSurgery={() => addCaseToSlot(slot, true)}
                   cases={cases}
                   computed={day?.slots[slot] ?? null}
                   focusCaseId={focusCaseId}
@@ -168,29 +175,29 @@ export function ShiftDayPage() {
           <aside className="lg:col-span-4">
             <div className="sticky top-4 space-y-3 rounded-2xl bg-zinc-100 p-4 ring-1 ring-zinc-200">
               <div>
-                <h3 className="text-sm font-bold text-zinc-700">สรุปเงิน{SHIFT_TYPE_LABEL[shiftType]}วันนี้</h3>
+                <h3 className="text-sm font-bold text-zinc-700">สรุปเงินเวรวันนี้</h3>
                 <p className="mt-0.5 text-[10px] text-zinc-500">{date ? formatBEFullDate(date) : ""}</p>
               </div>
 
               {/* Per-slot breakdown cards */}
               <div className="space-y-2">
-                {SLOTS.map((slot: Slot) => {
-                  const c = day?.slots[slot] ?? null;
+                {(["outHos", "inHos"] as const).flatMap(st => SLOTS.map((slot: Slot) => {
+                  const c = (st === "outHos" ? day : inDay)?.slots[slot] ?? null;
                   if (!c) return (
-                    <div key={slot} className="rounded-xl bg-white/60 px-3 py-2 text-[11px] text-zinc-400 ring-1 ring-zinc-200">
-                      <span className="font-semibold">{slot.replace("-", "–")}</span> · ยังไม่มีแพทย์
+                    <div key={`${st}-${slot}`} className="rounded-xl bg-white/60 px-3 py-2 text-[11px] text-zinc-400 ring-1 ring-zinc-200">
+                      <span className="font-semibold">{slot.replace("-", "–")} · {st === "outHos" ? "นอก รพ." : "ใน รพ."}</span> · ยังไม่มีแพทย์
                     </div>
                   );
-                  const cs = month.data.cases.filter((cc) => cc.date === date && cc.slot === slot);
+                  const cs = month.data!.cases.filter((cc) => cc.shift_type === st && cc.date === date && cc.slot === slot);
                   return (
                     <SlotBreakdownCard
-                      key={slot}
+                      key={`${st}-${slot}`}
                       computed={c}
                       caseCount={cs.length}
-                      caseRate={caseRate}
+                      caseRate={st === "outHos" ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS}
                     />
                   );
-                })}
+                }))}
               </div>
 
               {/* Per-doctor totals */}
@@ -217,7 +224,7 @@ export function ShiftDayPage() {
 
               <div className="flex items-center justify-between rounded-xl bg-violet-600 px-4 py-3 text-white">
                 <span className="text-xs font-semibold uppercase tracking-wide">รวมวันนี้</span>
-                <span className="text-xl font-bold tabular-nums">{fmtBaht(day?.total ?? 0)}</span>
+                <span className="text-xl font-bold tabular-nums">{fmtBaht((day?.total ?? 0) + (inDay?.total ?? 0))}</span>
               </div>
             </div>
           </aside>

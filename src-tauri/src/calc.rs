@@ -60,6 +60,10 @@ pub struct Assignment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ShiftCase {
+    #[serde(default)]
+    pub case_kind: String,
+    #[serde(default)]
+    pub case_name: String,
     pub shift_type: ShiftType,
     pub date: String,
     pub slot: Slot,
@@ -152,7 +156,8 @@ pub fn compute_slot_pay(
     let base = if off_hour { OFF_HOUR_SHIFT_PAY } else { 0.0 };
 
     let is_out = matches!(assignment.shift_type, ShiftType::OutHos);
-    let case_count = cases.len() as i32;
+    let case_count = cases.iter().filter(|c| c.case_kind != "surgery").count() as i32;
+    let surgery_count = cases.len() as i32 - case_count;
 
     // Deduction only computed for off-hour slots — in-hour base is 0 so any
     // deduction would just stay capped at 0 anyway, and we avoid double-counting
@@ -161,6 +166,7 @@ pub fn compute_slot_pay(
         if is_out {
             let m: i32 = cases
                 .iter()
+                .filter(|c| c.case_kind != "surgery")
                 .map(|c| case_minutes(c.leave_time.as_deref(), c.return_time.as_deref()))
                 .sum();
             (m, format!("ออกรวม {m} นาที"))
@@ -180,13 +186,14 @@ pub fn compute_slot_pay(
             CASE_BONUS_OUT_HOS
         } else {
             CASE_BONUS_IN_HOS
-        };
+        } + surgery_count as f64 * 4500.0;
     let total = (base - capped_deduct) + case_bonus;
 
     let tag = if off_hour { "นอกเวลา" } else { "ในเวลา" };
     let pieces: Vec<String> = [
         Some(tag.to_string()),
-        Some(format!("{case_count} เคส")),
+        Some(format!("{case_count} เคสชันสูตร")),
+        (surgery_count > 0).then(|| format!("{surgery_count} เคสผ่า × 4,500")),
         (!minutes_label.is_empty()).then(|| minutes_label.clone()),
         (units > 0).then(|| format!("หัก {units}×{DEDUCT_PER_HALF_HOUR}")),
     ]
@@ -275,9 +282,9 @@ mod tests {
         //   base = 0, deduction = 0 (in-hour skips), bonus = 3 × 1800 = 5400
         let a = assign(WEEKDAY, Slot::S08_16, Some("กนก"), ShiftType::OutHos);
         let cases = vec![
-            ShiftCase { shift_type: ShiftType::OutHos, date: WEEKDAY.into(), slot: Slot::S08_16, leave_time: Some("13:00".into()), return_time: Some("13:25".into()) },
-            ShiftCase { shift_type: ShiftType::OutHos, date: WEEKDAY.into(), slot: Slot::S08_16, leave_time: Some("14:00".into()), return_time: Some("14:30".into()) },
-            ShiftCase { shift_type: ShiftType::OutHos, date: WEEKDAY.into(), slot: Slot::S08_16, leave_time: Some("15:00".into()), return_time: Some("15:20".into()) },
+            ShiftCase { case_kind: String::new(), case_name: String::new(), shift_type: ShiftType::OutHos, date: WEEKDAY.into(), slot: Slot::S08_16, leave_time: Some("13:00".into()), return_time: Some("13:25".into()) },
+            ShiftCase { case_kind: String::new(), case_name: String::new(), shift_type: ShiftType::OutHos, date: WEEKDAY.into(), slot: Slot::S08_16, leave_time: Some("14:00".into()), return_time: Some("14:30".into()) },
+            ShiftCase { case_kind: String::new(), case_name: String::new(), shift_type: ShiftType::OutHos, date: WEEKDAY.into(), slot: Slot::S08_16, leave_time: Some("15:00".into()), return_time: Some("15:20".into()) },
         ];
         let p = compute_slot_pay(&a, &cases, &[]);
         assert_eq!(p.base, 0.0);
@@ -315,8 +322,7 @@ mod tests {
     fn out_hos_off_hour_with_deduction() {
         // Weekday 16-24 (off-hour), 1 case 25min out → base 780 − 48.75 + 1800
         let a = assign(WEEKDAY, Slot::S16_24, Some("อนิรุต"), ShiftType::OutHos);
-        let cases = vec![ShiftCase {
-            shift_type: ShiftType::OutHos,
+        let cases = vec![ShiftCase { case_kind: String::new(), case_name: String::new(), shift_type: ShiftType::OutHos,
             date: WEEKDAY.into(),
             slot: Slot::S16_24,
             leave_time: Some("18:00".into()),
@@ -334,8 +340,7 @@ mod tests {
         // Weekend 08-16 (off-hour), 3 inHos cases × 10 = 30min → 1 unit deduct
         let a = assign(SATURDAY, Slot::S08_16, Some("กนก"), ShiftType::InHos);
         let cases: Vec<_> = (0..3)
-            .map(|_| ShiftCase {
-                shift_type: ShiftType::InHos,
+            .map(|_| ShiftCase { case_kind: String::new(), case_name: String::new(), shift_type: ShiftType::InHos,
                 date: SATURDAY.into(),
                 slot: Slot::S08_16,
                 leave_time: None,
@@ -354,8 +359,7 @@ mod tests {
         // Off-hour, 100 inHos cases × 10 = 1000min → many units → capped at 780
         let a = assign(WEEKDAY, Slot::S00_08, Some("กนก"), ShiftType::InHos);
         let cases: Vec<_> = (0..100)
-            .map(|_| ShiftCase {
-                shift_type: ShiftType::InHos,
+            .map(|_| ShiftCase { case_kind: String::new(), case_name: String::new(), shift_type: ShiftType::InHos,
                 date: WEEKDAY.into(),
                 slot: Slot::S00_08,
                 leave_time: None,
@@ -372,4 +376,23 @@ mod tests {
     fn cross_midnight_case_duration() {
         assert_eq!(case_minutes(Some("23:30"), Some("00:15")), 45);
     }
+    #[test]
+    fn surgery_full_bonus_without_deduction_for_both_types() {
+        for shift_type in [ShiftType::OutHos, ShiftType::InHos] {
+            let a = assign(WEEKDAY, Slot::S00_08, Some("กนก"), shift_type);
+            let surgery = ShiftCase { case_kind: "surgery".into(), case_name: "ชื่อ นามสกุล".into(), shift_type, date: WEEKDAY.into(), slot: Slot::S00_08, leave_time: Some("00:00".into()), return_time: Some("08:00".into()) };
+            let p = compute_slot_pay(&a, &[surgery.clone()], &[]);
+            assert_eq!(p.total, 5280.0);
+            assert_eq!(p.deduction, 0.0);
+            let examination = ShiftCase { case_kind: "examination".into(), leave_time: Some("01:00".into()), return_time: Some("01:25".into()), ..surgery.clone() };
+            let p = compute_slot_pay(&a, &[surgery.clone(), examination], &[]);
+            assert_eq!(p.deduction, 48.75);
+            assert_eq!(p.case_bonus, 4500.0 + if shift_type == ShiftType::OutHos { 1800.0 } else { 1200.0 });
+            let office = assign(WEEKDAY, Slot::S08_16, Some("กนก"), shift_type);
+            assert_eq!(compute_slot_pay(&office, &[surgery.clone()], &[]).total, 4500.0);
+            let unassigned = assign(WEEKDAY, Slot::S00_08, None, shift_type);
+            assert_eq!(compute_slot_pay(&unassigned, &[surgery], &[]).total, 0.0);
+        }
+    }
+
 }

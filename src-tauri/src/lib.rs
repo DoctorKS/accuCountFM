@@ -37,6 +37,12 @@ pub fn run() {
             sql: include_str!("../migrations/0003_autopsy_counts.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "surgery cases and simultaneous duty constraint",
+            sql: include_str!("../migrations/0004_surgery_cases.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

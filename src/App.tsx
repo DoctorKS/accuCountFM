@@ -1,6 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { DashboardHome } from "@/routes/DashboardHome";
+
 import { ShiftMonthPage } from "@/routes/ShiftMonthPage";
 import { ShiftDayPage } from "@/routes/ShiftDayPage";
 import { DoctorBreakdownPage } from "@/routes/DoctorBreakdownPage";
@@ -14,7 +14,7 @@ export default function App() {
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
         <Routes>
-          <Route path="/" element={<DashboardHome />} />
+          <Route path="/" element={<ShiftMonthPage shiftType="outHos" />} />
           <Route path="/out" element={<ShiftMonthPage shiftType="outHos" />} />
           <Route path="/in" element={<ShiftMonthPage shiftType="inHos" />} />
           <Route path="/shift/:type/:date" element={<ShiftDayPage />} />

@@ -29,6 +29,7 @@ export interface Assignment {
 }
 
 export interface ShiftCase {
+  caseKind?: "examination" | "surgery";
   shiftType: ShiftType;
   date: string;
   slot: Slot;
@@ -104,7 +105,9 @@ export function computeSlotPay(
   const base = offHour ? OFF_HOUR_SHIFT_PAY : 0;
 
   const isOut = assignment.shiftType === "outHos";
-  const caseCount = cases.length;
+  const examinations = cases.filter(c => c.caseKind !== "surgery");
+  const surgeryCount = cases.length - examinations.length;
+  const caseCount = examinations.length;
 
   // Deduction only computed for off-hour slots — in-hour base is 0 so any
   // deduction would just stay capped at 0 anyway.
@@ -112,7 +115,7 @@ export function computeSlotPay(
   let minutesLabel = "";
   if (offHour) {
     if (isOut) {
-      minutesOut = cases.reduce((sum, c) => sum + caseMinutes(c.leaveTime, c.returnTime), 0);
+      minutesOut = examinations.reduce((sum, c) => sum + caseMinutes(c.leaveTime, c.returnTime), 0);
       minutesLabel = `ออกรวม ${minutesOut} นาที`;
     } else {
       minutesOut = caseCount * IN_HOS_MIN_PER_CASE;
@@ -123,13 +126,14 @@ export function computeSlotPay(
   const units = deductionUnits(minutesOut);
   const deduction = units * DEDUCT_PER_HALF_HOUR;
   const cappedDeduct = Math.min(deduction, base);
-  const caseBonus = caseCount * (isOut ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS);
+  const caseBonus = caseCount * (isOut ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS) + surgeryCount * 4500;
   const total = (base - cappedDeduct) + caseBonus;
 
   const tag = offHour ? "นอกเวลา" : "ในเวลา";
   const pieces = [
     tag,
-    `${caseCount} เคส`,
+    `${caseCount} เคสชันสูตร`,
+    surgeryCount ? `${surgeryCount} เคสผ่า × 4,500` : "",
     minutesLabel,
     units > 0 ? `หัก ${units}×${DEDUCT_PER_HALF_HOUR}` : "",
   ].filter(Boolean);

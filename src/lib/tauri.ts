@@ -46,6 +46,8 @@ export interface AssignmentForExport {
 }
 
 export interface CaseForExport {
+  caseKind?: "examination" | "surgery";
+  caseName?: string;
   shiftType: ShiftType;
   date: string;
   slot: Slot;
@@ -59,6 +61,7 @@ export interface ShiftBundle {
 }
 
 export interface ExportPayload {
+  autopsyCounts?: { doctor_name: string; cuts: number; non_cuts: number }[];
   yearMonth: string;
   savePath: string;
   holidays: number[];          // day-of-month integers — same scoping as calc

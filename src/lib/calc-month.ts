@@ -44,7 +44,7 @@ export function computeMonthByDoctor(
   holidays: number[],
 ): DoctorMonthSummary[] {
   const byKey = new Map<string, CaseRow[]>();
-  for (const c of cases) {
+  for (const c of cases.filter(c => c.shift_type === shiftType)) {
     const k = `${c.date}|${c.slot}`;
     const arr = byKey.get(k) ?? [];
     arr.push(c);
@@ -57,7 +57,7 @@ export function computeMonthByDoctor(
     }]),
   ) as unknown as Record<Doctor, DoctorMonthSummary>;
 
-  for (const a of assignments) {
+  for (const a of assignments.filter(a => a.shift_type === shiftType)) {
     if (!a.doctor_name) continue;
     const cs = byKey.get(`${a.date}|${a.slot}`) ?? [];
     const assignment: Assignment = {
@@ -70,6 +70,7 @@ export function computeMonthByDoctor(
       shiftType,
       date: c.date,
       slot: c.slot,
+      caseKind: c.case_kind,
       leaveTime: c.leave_time,
       returnTime: c.return_time,
     }));
@@ -112,15 +113,15 @@ export function computeDay(
   };
   let total = 0;
   for (const slot of Object.keys(slots) as Slot[]) {
-    const a = monthAssignments.find((x) => x.date === date && x.slot === slot);
-    const cs = monthCases.filter((c) => c.date === date && c.slot === slot);
+    const a = monthAssignments.find((x) => x.shift_type === shiftType && x.date === date && x.slot === slot);
+    const cs = monthCases.filter((c) => c.shift_type === shiftType && c.date === date && c.slot === slot);
     if (!a || !a.doctor_name) {
       slots[slot] = null;
       continue;
     }
     const pay = computeSlotPay(
       { shiftType, date, slot, doctorName: a.doctor_name },
-      cs.map((c) => ({ shiftType, date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time })),
+      cs.map((c) => ({ shiftType, caseKind: c.case_kind, date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time })),
       holidays,
     );
     slots[slot] = {

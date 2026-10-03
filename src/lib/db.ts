@@ -39,6 +39,7 @@ export interface CaseRow {
   date: string;
   slot: Slot;
   case_name: string;
+  case_kind?: "examination" | "surgery";
   leave_time: string | null;
   return_time: string | null;
   position: number;
@@ -128,7 +129,7 @@ export async function addCase(
   shiftType: ShiftType,
   date: string,
   slot: Slot,
-  init: { caseName?: string; leaveTime?: string | null; returnTime?: string | null } = {},
+  init: { caseName?: string; leaveTime?: string | null; returnTime?: string | null; caseKind?: "examination" | "surgery" } = {},
 ): Promise<number> {
   const conn = await db();
   // Position = current max + 1 (simple — small slot sizes)
@@ -141,8 +142,8 @@ export async function addCase(
   const pos = rows[0]?.next_pos ?? 0;
   const r = await conn.execute(
     `INSERT INTO shift_cases
-       (shift_type, date, slot, case_name, leave_time, return_time, position)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+       (shift_type, date, slot, case_name, leave_time, return_time, position, case_kind)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       shiftType,
       date,
@@ -151,6 +152,7 @@ export async function addCase(
       init.leaveTime ?? null,
       init.returnTime ?? null,
       pos,
+      init.caseKind ?? "examination",
     ],
   );
   return r.lastInsertId ?? 0;
@@ -159,7 +161,7 @@ export async function addCase(
 /** Patch arbitrary case fields by id. */
 export async function updateCase(
   id: number,
-  patch: Partial<Pick<CaseRow, "case_name" | "leave_time" | "return_time">>,
+  patch: Partial<Pick<CaseRow, "case_name" | "leave_time" | "return_time" | "shift_type">>,
 ): Promise<void> {
   const fields: string[] = [];
   const values: unknown[] = [];

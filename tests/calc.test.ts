@@ -169,3 +169,53 @@ describe("computeSlotPay", () => {
     expect(p.total).toBe(100 * CASE_BONUS_IN_HOS);
   });
 });
+
+
+describe("surgery pay", () => {
+  for (const shiftType of ["outHos", "inHos"] as const) {
+    it(`${shiftType}: surgery adds 4500 without real or virtual deduction`, () => {
+      const assignment = assign(WEEKDAY, "0000-0800", "กนก", shiftType);
+      const surgery: ShiftCase = { shiftType, date: WEEKDAY, slot: "0000-0800", caseKind: "surgery", leaveTime: "00:00", returnTime: "08:00" };
+      const pay = computeSlotPay(assignment, [surgery], []);
+      expect(pay.base).toBe(780);
+      expect(pay.deduction).toBe(0);
+      expect(pay.caseBonus).toBe(4500);
+      expect(pay.total).toBe(5280);
+      const mixed = computeSlotPay(assignment, [surgery, { ...surgery, caseKind: "examination", leaveTime: "01:00", returnTime: "01:25" }], []);
+      expect(mixed.deduction).toBe(48.75);
+      expect(mixed.caseBonus).toBe(4500 + (shiftType === "outHos" ? 1800 : 1200));
+    });
+  }
+  it("office surgery has zero base and receives the full 4500", () => {
+    const assignment = assign(WEEKDAY, "0800-1600", "กนก", "outHos");
+    const pay = computeSlotPay(assignment, [{ shiftType: "outHos", date: WEEKDAY, slot: "0800-1600", caseKind: "surgery", leaveTime: "08:00", returnTime: "16:00" }], []);
+    expect(pay.total).toBe(4500);
+    expect(pay.deduction).toBe(0);
+  });
+  it("unassigned surgery pays nobody", () => {
+    expect(computeSlotPay(assign(WEEKDAY, "0000-0800", null, "outHos"), [{ shiftType: "outHos", date: WEEKDAY, slot: "0000-0800", caseKind: "surgery", leaveTime: null, returnTime: null }], []).total).toBe(0);
+  });
+});
+
+
+import { computeMonthByDoctor, computeDay } from "@/lib/calc-month";
+import type { AssignmentRow, CaseRow } from "@/lib/db";
+
+describe("combined month aggregation", () => {
+  it("keeps each case with its type and credits surgery exactly once", () => {
+    const assignments: AssignmentRow[] = [
+      { id: 1, shift_type: "outHos", date: WEEKDAY, slot: "0800-1600", doctor_name: "กนก", updated_at: "" },
+      { id: 2, shift_type: "inHos", date: WEEKDAY, slot: "0800-1600", doctor_name: "กนก", updated_at: "" },
+    ];
+    const base: CaseRow = { id: 1, shift_type: "outHos", date: WEEKDAY, slot: "0800-1600", case_name: "ผู้ป่วย", leave_time: "08:00", return_time: "08:30", position: 0, created_at: "", updated_at: "" };
+    const cases: CaseRow[] = [base, { ...base, id: 2, shift_type: "inHos", leave_time: null, return_time: null }, { ...base, id: 3, case_kind: "surgery" }];
+    const out = computeMonthByDoctor("outHos", assignments, cases, []).find(s => s.doctor === "กนก")!;
+    const inn = computeMonthByDoctor("inHos", assignments, cases, []).find(s => s.doctor === "กนก")!;
+    expect(out.total).toBe(6300);
+    expect(inn.total).toBe(1200);
+    expect(out.slots).toHaveLength(1);
+    expect(inn.slots).toHaveLength(1);
+    expect(computeDay("outHos", WEEKDAY, assignments, cases, []).total).toBe(out.total);
+    expect(computeDay("inHos", WEEKDAY, assignments, cases, []).total).toBe(inn.total);
+  });
+});

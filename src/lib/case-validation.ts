@@ -1,13 +1,4 @@
-/**
- * Case completeness checks — shared by CaseRow (Enter guard) and
- * ShiftDayPage (back-nav guard, PageDown handler).
- *
- * Rule per user spec:
- *   outHos case is complete when case_name has a non-empty digit prefix
- *     AND leave_time AND return_time are both set.
- *   inHos case is complete when case_name has a non-empty digit prefix.
- *     (No times tracked for inHos — each case counts as 10min virtual time.)
- */
+/** Case names are required; outside examinations and surgery also require times. */
 import type { CaseRow } from "./db";
 import type { ShiftType } from "./constants";
 
@@ -19,7 +10,7 @@ export function stripCaseSuffix(caseName: string): string {
 /** True when the case row has the minimum fields required for its shift type. */
 export function isCaseComplete(row: CaseRow, shiftType: ShiftType): boolean {
   if (!stripCaseSuffix(row.case_name).trim()) return false;
-  if (shiftType === "outHos") {
+  if (row.case_kind === "surgery" || shiftType === "outHos") {
     if (!row.leave_time || !row.return_time) return false;
   }
   return true;
@@ -27,7 +18,7 @@ export function isCaseComplete(row: CaseRow, shiftType: ShiftType): boolean {
 
 /** Cases in `cases` that fail `isCaseComplete`. Caller filters by date/slot. */
 export function findIncompleteCases(cases: CaseRow[], shiftType: ShiftType): CaseRow[] {
-  return cases.filter((c) => !isCaseComplete(c, shiftType));
+  return cases.filter((c) => !isCaseComplete(c, c.shift_type ?? shiftType));
 }
 
 /** Variant that checks raw values (used by CaseRow's onEnter while editing). */

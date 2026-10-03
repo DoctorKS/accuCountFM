@@ -1,28 +1,29 @@
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useMemo } from "react";
-import { SHIFT_TYPE_LABEL, SLOT_LABEL, CASE_BONUS_OUT_HOS, CASE_BONUS_IN_HOS, type ShiftType } from "@/lib/constants";
+import { SHIFT_TYPE_LABEL, SLOT_LABEL, type ShiftType } from "@/lib/constants";
 import { formatBEMonth } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
-import { useMonth } from "@/hooks/useShift";
+import { useMergedMonth } from "@/hooks/useShift";
 import { computeMonthByDoctor } from "@/lib/calc-month";
 import { isDoctor } from "@/lib/doctors";
 
 /** Row-by-row pay breakdown for one doctor, one type, one month. */
 export function DoctorBreakdownPage() {
-  const { type, doctor, ym } = useParams<{ type: "out" | "in"; doctor: string; ym: string }>();
+  const { type, doctor, ym } = useParams<{ type: "out" | "in" | "all"; doctor: string; ym: string }>();
   const shiftType: ShiftType = type === "in" ? "inHos" : "outHos";
   // Carry ym back to the month page so the picker stays on the right month.
   const backTo = `${type === "in" ? "/in" : "/out"}${ym ? `?ym=${ym}` : ""}`;
   const doctorName = doctor ? decodeURIComponent(doctor) : "";
   const valid = isDoctor(doctorName);
-  const caseRate = shiftType === "outHos" ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS;
 
-  const month = useMonth(shiftType, ym ?? "");
+
+  const month = useMergedMonth(ym ?? "");
   const summary = useMemo(() => {
     if (!month.data || !valid) return null;
-    return computeMonthByDoctor(shiftType, month.data.assignments, month.data.cases, month.data.holidays)
-      .find((s) => s.doctor === doctorName) ?? null;
+    const types: ShiftType[] = type === "all" ? ["outHos", "inHos"] : [shiftType];
+    const summaries = types.flatMap(t => computeMonthByDoctor(t, month.data!.assignments, month.data!.cases, month.data!.holidays)).filter(s => s.doctor === doctorName);
+    return { total: summaries.reduce((n,s) => n+s.total,0), slots: summaries.flatMap(s => s.slots) };
   }, [month.data, shiftType, valid, doctorName]);
 
   return (
@@ -32,7 +33,7 @@ export function DoctorBreakdownPage() {
           <ArrowLeft className="h-4 w-4" /> กลับ
         </Link>
         <div>
-          <div className="text-center text-xs text-zinc-500">{SHIFT_TYPE_LABEL[shiftType]}</div>
+          <div className="text-center text-xs text-zinc-500">{type === "all" ? "เวรชันสูตร" : SHIFT_TYPE_LABEL[shiftType]}</div>
           <h1 className="text-center text-xl font-bold">แจกแจงเงินเวร — {doctorName}</h1>
         </div>
         <div className="w-24" />
@@ -73,10 +74,10 @@ export function DoctorBreakdownPage() {
                   // TotalSummary — exposed per-row here for transparency.
                   const shiftHourPay = Math.max(0, s.pay.base - s.pay.deduction);
                   return (
-                    <tr key={`${s.date}|${s.slot}`} className="hover:bg-zinc-50">
+                    <tr key={`${s.shiftType}|${s.date}|${s.slot}`} className="hover:bg-zinc-50">
                       <td className="px-4 py-2 font-mono text-xs tabular-nums">{s.date}</td>
                       <td className="px-4 py-2">
-                        {SLOT_LABEL[s.slot]}{" "}
+                        {SLOT_LABEL[s.slot]} · {s.shiftType === "outHos" ? "นอก รพ." : "ใน รพ."}{" "}
                         {s.pay.offHour ? (
                           <span className="ml-1 text-[10px] text-rose-600">นอกเวลา</span>
                         ) : (
@@ -94,7 +95,7 @@ export function DoctorBreakdownPage() {
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums text-emerald-700">
                         {s.caseCount > 0
-                          ? <span className="whitespace-nowrap">{s.caseCount} × {caseRate.toLocaleString()} = {fmtBaht(s.pay.caseBonus)}</span>
+                          ? <span className="whitespace-nowrap">{s.caseCount} เคส = {fmtBaht(s.pay.caseBonus)}</span>
                           : <span className="text-zinc-300">—</span>}
                       </td>
                       <td className="px-4 py-2 text-right font-semibold tabular-nums">{fmtBaht(s.pay.total)}</td>

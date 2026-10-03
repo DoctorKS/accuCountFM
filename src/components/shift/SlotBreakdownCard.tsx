@@ -9,7 +9,7 @@ import type { SlotComputed } from "@/lib/calc-month";
  * bonus so the user sees exactly where each baht came from.
  */
 export function SlotBreakdownCard({
-  computed, caseCount, caseRate,
+  computed,
 }: {
   computed: SlotComputed;
   caseCount: number;
@@ -21,7 +21,7 @@ export function SlotBreakdownCard({
   return (
     <div className="rounded-xl bg-white p-3 ring-1 ring-zinc-200">
       <div className="mb-1.5 flex items-center justify-between text-xs">
-        <span className="font-semibold text-zinc-700">{SLOT_LABEL[slot]}</span>
+        <span className="font-semibold text-zinc-700">{SLOT_LABEL[slot]} · {computed.shiftType === "outHos" ? "นอก รพ." : "ใน รพ."}</span>
         <span className="inline-flex items-center gap-1 text-zinc-600">
           {doctor && isDoctor(doctor) && (
             <span className="h-2 w-2 rounded-full" style={{ background: DOCTOR_COLOR_HEX[doctor] }} />
@@ -47,7 +47,7 @@ export function SlotBreakdownCard({
         )}
         {pay.caseBonus > 0 && (
           <Line
-            label={`เคสชันสูตร ${caseCount}×${caseRate.toLocaleString()}`}
+            label="ค่าเคสชันสูตรและเคสผ่า"
             amount={pay.caseBonus}
             tone="positive"
           />

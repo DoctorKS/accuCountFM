@@ -430,3 +430,17 @@ Sign-related files (per SIGN.md):
 - `tools/signing.pfx` + `tools/*.cer` — **gitignored** (private cert + the
   public copy shipped to users). Never commit either; back up the `.pfx`
   off-machine.
+
+## October 2026 approved changes
+
+- Home opens the combined month calendar; both duty types share the day editor.
+- Assignments remain separate by type. The same doctor can cover both types only
+  at 08:00–16:00 on weekdays without a holiday. Regular-office base remains 0;
+  every off-hour assignment pays 780, including consecutive shifts.
+- Case names accept full names; each examination selects inHos/outHos independently.
+- `shift_cases.case_kind` distinguishes examination from surgery (migration 0004).
+  Surgery pays 4,500 per row to its selected duty assignment; times are recorded
+  but contribute neither real nor virtual deduction minutes.
+- Legacy monthly autopsy counts remain separate adjustments; daily surgery rows
+  are counted automatically, never copied into the manually entered counts.
+- Summary and Excel show surgery pay separately from examination type totals.

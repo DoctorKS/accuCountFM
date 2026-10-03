@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 /** Main nav (above the divider). */
 const ITEMS = [
-  { to: "/",            label: "Dashboard",              Icon: LayoutDashboard, end: true },
+  { to: "/",            label: "ตารางเวร",              Icon: LayoutDashboard, end: true },
   { to: "/summary/in",  label: "สรุปเงินเวรชันสูตรใน",     Icon: FileText },
   { to: "/summary/out", label: "สรุปเงินเวรชันสูตรนอก",    Icon: FileSearch },
   { to: "/summary",     label: "เงินเวรรวมทั้งหมด",        Icon: Sigma },
