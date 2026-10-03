@@ -189,7 +189,7 @@ export function ShiftDayPage() {
 
               {/* Per-slot breakdown cards */}
               <div className="space-y-2">
-                {(["outHos", "inHos"] as const).flatMap(st => SLOTS.map((slot: Slot) => {
+                {SLOTS.flatMap((slot: Slot) => (["inHos", "outHos"] as const).map(st => {
                   const c = (st === "outHos" ? day : inDay)?.slots[slot] ?? null;
                   if (!c) return (
                     <div key={`${st}-${slot}`} className="rounded-xl bg-white/60 px-3 py-2 text-[11px] text-zinc-400 ring-1 ring-zinc-200">

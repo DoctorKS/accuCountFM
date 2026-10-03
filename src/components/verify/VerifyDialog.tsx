@@ -2,10 +2,16 @@ import { X } from "lucide-react";
 import { useMemo } from "react";
 import type { ShiftType, Slot } from "@/lib/constants";
 import { SLOTS } from "@/lib/constants";
-import { DOCTORS, DOCTOR_BG_CLASS, isDoctor, type Doctor } from "@/lib/doctors";
+import { DOCTORS, isDoctor, type Doctor } from "@/lib/doctors";
 import { useMonth, useSetAssignment } from "@/hooks/useShift";
 import { formatBEMonth, WEEKDAY_TH_SHORT, daysInMonth } from "@/lib/buddhist";
-import { isOffHour } from "@/lib/calc";
+
+const DOCTOR_TABLE_BG: Record<Doctor, string> = {
+  อนิรุต: "bg-violet-200",
+  พฤพงศ์: "bg-rose-200",
+  กนก: "bg-blue-200",
+  กวินท์: "bg-emerald-200",
+};
 
 /**
  * ตรวจสอบตารางเวร — full-month grid for both shift_types side-by-side.
@@ -54,8 +60,7 @@ export function VerifyDialog({ yearMonth, onClose }: { yearMonth: string; onClos
             <h2 className="font-semibold">ตรวจสอบตารางเวร — {formatBEMonth(yearMonth + "-01")}</h2>
             <p className="mt-0.5 text-xs text-zinc-500">
               คลิก dropdown ใน cell เพื่อเปลี่ยนแพทย์ — บันทึกอัตโนมัติ ·
-              แถวสีอ่อน = วันหยุดเสาร์-อาทิตย์ / นักขัตฤกษ์ ·
-              cell สีจาง = ในเวลา (08-16 weekday)
+              แถวสีเทา = วันหยุดเสาร์-อาทิตย์ / นักขัตฤกษ์ · สีหลังชื่อ = สีประจำแพทย์
             </p>
           </div>
           <button onClick={onClose} className="rounded p-1 text-zinc-500 hover:bg-zinc-100"><X className="h-4 w-4" /></button>
@@ -87,8 +92,8 @@ export function VerifyDialog({ yearMonth, onClose }: { yearMonth: string; onClos
                   const dow = dt.getUTCDay();
                   const isWeekend = dow === 0 || dow === 6;
                   const isHoliday = holidays.includes(d);
-                  // Weekend + holiday share the same light-red row tint.
-                  const rowTint = (isHoliday || isWeekend) ? "bg-rose-50/60" : "";
+                  // Preserve doctor colors on top of the gray holiday row.
+                  const rowTint = (isHoliday || isWeekend) ? "bg-zinc-200" : "";
 
                   return (
                     <tr key={d} className={rowTint}>
@@ -99,17 +104,16 @@ export function VerifyDialog({ yearMonth, onClose }: { yearMonth: string; onClos
                       </td>
                       {(["outHos", "inHos"] as ShiftType[]).flatMap((st) =>
                         SLOTS.map((slot) => {
-                          const off = isOffHour(date, slot, holidays);
                           const doctor = index.get(`${st}|${date}|${slot}`) ?? null;
                           return (
                             <td
                               key={`${st}-${slot}`}
-                              className={`border border-zinc-200 p-0 ${off ? "" : "bg-zinc-100/40"} ${doctor ? DOCTOR_BG_CLASS[doctor] : ""}`}
+                              className="border border-zinc-300 p-1"
                             >
                               <select
                                 value={doctor ?? ""}
                                 onChange={(e) => handleChange(st, date, slot, e.target.value)}
-                                className="w-full bg-transparent px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-violet-300"
+                                className={`w-full rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400 ${doctor ? DOCTOR_TABLE_BG[doctor] : "bg-transparent"}`}
                               >
                                 <option value="">—</option>
                                 {DOCTORS.map((doc) => <option key={doc} value={doc}>{doc}</option>)}
