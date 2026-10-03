@@ -117,10 +117,15 @@ export function ShiftDayPage() {
       cur.slots += 1;
       map.set(slot.doctor, cur);
     }
+    for (const c of month.data?.cases.filter(c => c.date === date && c.case_kind === "surgery" && c.surgeon_name) ?? []) {
+      const surgeon = c.surgeon_name!;
+      const entry = map.get(surgeon) ?? { total: 0, slots: 0 };
+      entry.total += 4500; map.set(surgeon, entry);
+    }
     return DOCTORS
       .filter((d) => map.has(d))
       .map((d) => ({ doctor: d, ...(map.get(d)!) }));
-  }, [day, inDay]);
+  }, [day, inDay, month.data, date]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -224,7 +229,7 @@ export function ShiftDayPage() {
 
               <div className="flex items-center justify-between rounded-xl bg-violet-600 px-4 py-3 text-white">
                 <span className="text-xs font-semibold uppercase tracking-wide">รวมวันนี้</span>
-                <span className="text-xl font-bold tabular-nums">{fmtBaht((day?.total ?? 0) + (inDay?.total ?? 0))}</span>
+                <span className="text-xl font-bold tabular-nums">{fmtBaht(perDoctor.reduce((sum, d) => sum + d.total, 0))}</span>
               </div>
             </div>
           </aside>

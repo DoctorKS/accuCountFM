@@ -32,7 +32,7 @@ export function buildCaseDoctorReport(
       throw new Error(`กรุณาบันทึกเวลาให้ครบสำหรับ ${name}`);
     return value;
   };
-  return cases.filter(c => c.date.slice(0, 7) === yearMonth && assigned.has(`${c.shift_type}|${c.date}|${c.slot}`))
+  return cases.filter(c => c.date.slice(0, 7) === yearMonth && (c.case_kind === "surgery" && c.surgeon_name ? c.surgeon_name === doctor : assigned.has(`${c.shift_type}|${c.date}|${c.slot}`)))
     .map(c => {
       if (!c.case_name.trim()) throw new Error(`กรุณาบันทึกชื่อผู้เสียชีวิตวันที่ ${c.date}`);
       const surgery = c.case_kind === "surgery";

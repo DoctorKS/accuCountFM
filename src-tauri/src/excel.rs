@@ -165,7 +165,7 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
             let cases_in_slot: Vec<ShiftCase> = bundle
                 .cases
                 .iter()
-                .filter(|c| c.date == a.date && c.slot == a.slot)
+                .filter(|c| c.date == a.date && c.slot == a.slot && !(c.case_kind == "surgery" && c.surgeon_name.is_some()))
                 .cloned()
                 .collect();
             let pay = compute_slot_pay(a, &cases_in_slot, holidays);
@@ -196,6 +196,13 @@ pub fn write_workbook(payload: &ExportPayload) -> Result<ExportResult, String> {
         sh3.set_column_width(i as u16, *w).ok();
     }
 
+    for bundle in [&payload.out_hos, &payload.in_hos].into_iter().flatten() {
+        for c in bundle.cases.iter().filter(|c| c.case_kind == "surgery") {
+            if let Some(surgeon) = &c.surgeon_name {
+                if let Some(t) = totals.get_mut(surgeon) { t.surgery += 4500.0; t.total += 4500.0; }
+            }
+        }
+    }
     for count in &payload.autopsy_counts {
         if let Some(t) = totals.get_mut(&count.doctor_name) {
             let surgery = count.cuts as f64 * 4500.0;
@@ -251,7 +258,7 @@ mod tests {
     #[test]
     fn exported_surgery_and_legacy_adjustments_match_summary() {
         let path = std::env::temp_dir().join(format!("accucountfm-export-test-{}.xlsx", std::process::id()));
-        let payload: ExportPayload = serde_json::from_value(serde_json::json!({
+        let mut payload: ExportPayload = serde_json::from_value(serde_json::json!({
             "yearMonth": "2026-05", "savePath": path.to_string_lossy(), "holidays": [],
             "autopsyCounts": [{ "doctor_name": "กนก", "cuts": 1, "non_cuts": 1 }],
             "outHos": {
@@ -273,6 +280,11 @@ mod tests {
         assert_eq!(total.surgery, 9000.0);
         assert_eq!(total.legacy_non_cut, 2250.0);
         assert_eq!(total.total, 14250.0);
+        payload.out_hos.as_mut().unwrap().cases[0].surgeon_name = Some("อนิรุต".into());
+        let moved = write_workbook(&payload).unwrap();
+        assert_eq!(moved.doctor_totals["กนก"].total, 9750.0);
+        assert_eq!(moved.doctor_totals["อนิรุต"].total, 4500.0);
+        assert_eq!(moved.doctor_totals["อนิรุต"].surgery, 4500.0);
         assert!(path.metadata().unwrap().len() > 0);
         std::fs::remove_file(path).unwrap();
     }

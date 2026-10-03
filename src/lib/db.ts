@@ -39,6 +39,7 @@ export interface CaseRow {
   date: string;
   slot: Slot;
   case_name: string;
+  surgeon_name?: Doctor | null;
   examination_time?: string | null;
   case_kind?: "examination" | "surgery";
   leave_time: string | null;
@@ -162,7 +163,7 @@ export async function addCase(
 /** Patch arbitrary case fields by id. */
 export async function updateCase(
   id: number,
-  patch: Partial<Pick<CaseRow, "case_name" | "examination_time" | "leave_time" | "return_time" | "shift_type">>,
+  patch: Partial<Pick<CaseRow, "case_name" | "surgeon_name" | "examination_time" | "leave_time" | "return_time" | "shift_type">>,
 ): Promise<void> {
   const fields: string[] = [];
   const values: unknown[] = [];

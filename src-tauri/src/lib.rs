@@ -51,6 +51,12 @@ pub fn run() {
             sql: include_str!("../migrations/0005_examination_time.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "case surgeon",
+            sql: include_str!("../migrations/0006_surgeon_name.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

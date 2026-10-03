@@ -104,7 +104,7 @@ export function useUpdateCase() {
   const qc = useQueryClient();
   return useMutation({
     onError: error => toast.error("บันทึกล้มเหลว: " + String(error)),
-    mutationFn: ({ id, patch }: { id: number; patch: Partial<Pick<CaseRow, "case_name" | "examination_time" | "leave_time" | "return_time" | "shift_type">> }) =>
+    mutationFn: ({ id, patch }: { id: number; patch: Partial<Pick<CaseRow, "case_name" | "surgeon_name" | "examination_time" | "leave_time" | "return_time" | "shift_type">> }) =>
       updateCase(id, patch),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["month"] });

@@ -1,3 +1,4 @@
+import { computeMonthByDoctor } from "@/lib/calc-month";
 import { describe, expect, it } from "vitest";
 import { buildCaseDoctorReport, buildInHosDoctorReport } from "@/lib/doctor-report";
 import type { AssignmentRow, CaseRow } from "@/lib/db";
@@ -53,4 +54,14 @@ describe("case report", () => {
   it("requires saved times instead of inventing missing legacy data", () => {
     expect(() => buildCaseDoctorReport("กวินท์", "2026-10", [assignment], [examination])).toThrow("กรุณาบันทึกเวลา");
   });
+});
+
+it("pays an independently selected surgeon once, even without a duty assignment", () => {
+  const surgery: CaseRow = { ...examination, case_kind: "surgery", surgeon_name: "อนิรุต", leave_time: "01:00", return_time: "02:00" };
+  const totals = computeMonthByDoctor("inHos", [assignment], [surgery], []);
+  expect(totals.find(t => t.doctor === "กวินท์")?.total).toBe(780);
+  expect(totals.find(t => t.doctor === "อนิรุต")?.total).toBe(4500);
+  expect(buildCaseDoctorReport("อนิรุต", "2026-10", [assignment], [surgery])[0].compensation).toBe(4500);
+  expect(buildCaseDoctorReport("กวินท์", "2026-10", [assignment], [surgery])).toEqual([]);
+  expect(computeMonthByDoctor("inHos", [], [surgery], []).find(t => t.doctor === "อนิรุต")?.total).toBe(4500);
 });

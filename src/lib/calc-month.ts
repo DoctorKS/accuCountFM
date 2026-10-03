@@ -66,7 +66,7 @@ export function computeMonthByDoctor(
       slot: a.slot,
       doctorName: a.doctor_name,
     };
-    const casesForCalc: ShiftCase[] = cs.map((c) => ({
+    const casesForCalc: ShiftCase[] = cs.filter(c => !(c.case_kind === "surgery" && c.surgeon_name)).map((c) => ({
       shiftType,
       date: c.date,
       slot: c.slot,
@@ -87,6 +87,10 @@ export function computeMonthByDoctor(
       pay,
       caseCount: cs.length,
     });
+  }
+  for (const c of cases.filter(c => c.shift_type === shiftType && c.case_kind === "surgery" && c.surgeon_name)) {
+    const surgeon = byDoctor[c.surgeon_name!];
+    surgeon.total += 4500; surgeon.bonusTotal += 4500;
   }
   return Object.values(byDoctor);
 }
@@ -121,7 +125,7 @@ export function computeDay(
     }
     const pay = computeSlotPay(
       { shiftType, date, slot, doctorName: a.doctor_name },
-      cs.map((c) => ({ shiftType, caseKind: c.case_kind, date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time })),
+      cs.filter(c => !(c.case_kind === "surgery" && c.surgeon_name)).map((c) => ({ shiftType, caseKind: c.case_kind, date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time })),
       holidays,
     );
     slots[slot] = {

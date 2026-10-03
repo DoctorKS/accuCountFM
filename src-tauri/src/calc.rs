@@ -59,6 +59,8 @@ pub struct Assignment {
 #[serde(rename_all = "camelCase")]
 pub struct ShiftCase {
     #[serde(default)]
+    pub surgeon_name: Option<String>,
+    #[serde(default)]
     pub case_kind: String,
     #[serde(default)]
     pub case_name: String,
@@ -287,6 +289,7 @@ mod tests {
         let a = assign(WEEKDAY, Slot::S08_16, Some("กนก"), ShiftType::OutHos);
         let cases = vec![
             ShiftCase {
+                surgeon_name: None,
                 case_kind: String::new(),
                 case_name: String::new(),
                 shift_type: ShiftType::OutHos,
@@ -296,6 +299,7 @@ mod tests {
                 return_time: Some("13:25".into()),
             },
             ShiftCase {
+                surgeon_name: None,
                 case_kind: String::new(),
                 case_name: String::new(),
                 shift_type: ShiftType::OutHos,
@@ -305,6 +309,7 @@ mod tests {
                 return_time: Some("14:30".into()),
             },
             ShiftCase {
+                surgeon_name: None,
                 case_kind: String::new(),
                 case_name: String::new(),
                 shift_type: ShiftType::OutHos,
@@ -351,6 +356,7 @@ mod tests {
         // Weekday 16-24 (off-hour), 1 case 25min out → base 780 − 48.75 + 1800
         let a = assign(WEEKDAY, Slot::S16_24, Some("อนิรุต"), ShiftType::OutHos);
         let cases = vec![ShiftCase {
+            surgeon_name: None,
             case_kind: String::new(),
             case_name: String::new(),
             shift_type: ShiftType::OutHos,
@@ -372,6 +378,7 @@ mod tests {
         let a = assign(SATURDAY, Slot::S08_16, Some("กนก"), ShiftType::InHos);
         let cases: Vec<_> = (0..3)
             .map(|_| ShiftCase {
+                surgeon_name: None,
                 case_kind: String::new(),
                 case_name: String::new(),
                 shift_type: ShiftType::InHos,
@@ -394,6 +401,7 @@ mod tests {
         let a = assign(WEEKDAY, Slot::S00_08, Some("กนก"), ShiftType::InHos);
         let cases: Vec<_> = (0..100)
             .map(|_| ShiftCase {
+                surgeon_name: None,
                 case_kind: String::new(),
                 case_name: String::new(),
                 shift_type: ShiftType::InHos,
@@ -418,6 +426,7 @@ mod tests {
         for shift_type in [ShiftType::OutHos, ShiftType::InHos] {
             let a = assign(WEEKDAY, Slot::S00_08, Some("กนก"), shift_type);
             let surgery = ShiftCase {
+                surgeon_name: None,
                 case_kind: "surgery".into(),
                 case_name: "ชื่อ นามสกุล".into(),
                 shift_type,
@@ -430,6 +439,7 @@ mod tests {
             assert_eq!(p.total, 5280.0);
             assert_eq!(p.deduction, 0.0);
             let examination = ShiftCase {
+                surgeon_name: None,
                 case_kind: "examination".into(),
                 leave_time: Some("01:00".into()),
                 return_time: Some("01:25".into()),

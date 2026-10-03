@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { CaseRow as CaseRowT } from "@/lib/db";
+import { DOCTORS } from "@/lib/doctors";
 import type { ShiftType } from "@/lib/constants";
 import { useUpdateCase, useDeleteCase } from "@/hooks/useShift";
 import { TimePicker24 } from "@/components/ui/TimePicker24";
@@ -49,14 +50,19 @@ export function CaseRow({ row, autoFocus = false, onAddNext }: {
           onChange={v => upd.mutate({ id: row.id, patch: { return_time: v } })} />
       </label>
     </>}
-    <select aria-label={surgery ? "เวรที่รับค่าผ่า" : "ประเภทชันสูตร"} value={row.shift_type}
+    {surgery ? <select aria-label="แพทย์ผู้ผ่า" value={row.surgeon_name ?? ""}
+      onChange={e => upd.mutate({ id: row.id, patch: { surgeon_name: (e.target.value || null) as typeof row.surgeon_name } })}
+      className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm">
+      <option value="">— เลือกแพทย์ผู้ผ่า —</option>
+      {DOCTORS.map(d => <option key={d} value={d}>{d}</option>)}
+    </select> : <select aria-label={surgery ? "เวรที่รับค่าผ่า" : "ประเภทชันสูตร"} value={row.shift_type}
       onChange={e => upd.mutate({ id: row.id, patch: {
         shift_type: e.target.value as ShiftType,
         ...(!surgery && e.target.value === "inHos" ? { leave_time: null, return_time: null } : {}),
       } })} className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm">
       <option value="inHos">{surgery ? "แพทย์เวรใน รพ." : "ชันสูตรในโรงพยาบาล"}</option>
       <option value="outHos">{surgery ? "แพทย์เวรนอก รพ." : "ชันสูตรนอกโรงพยาบาล"}</option>
-    </select>
+    </select>}
     {surgery && <span className="text-xs font-semibold text-[#455766]">เคสผ่า</span>}
 
     <button type="button" aria-label="ลบเคส" onClick={() => del.mutate(row.id)} className="rounded-md p-1.5 text-rose-500 hover:bg-rose-50"><Trash2 className="h-4 w-4" /></button>

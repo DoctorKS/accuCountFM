@@ -27,7 +27,7 @@ function toBundle(shiftType: ShiftType, assignments: AssignmentRow[], cases: Cas
       shiftType, date: a.date, slot: a.slot, doctorName: a.doctor_name,
     })),
     cases: cases.map((c) => ({
-      shiftType, caseKind: c.case_kind, caseName: c.case_name, date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time,
+      shiftType, surgeonName: c.surgeon_name, caseKind: c.case_kind, caseName: c.case_name, date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time,
     })),
   };
 }
@@ -89,7 +89,7 @@ export function TotalSummary({ mode }: { mode: Mode }) {
     const inn = inByDoctor.get(d);
     const ap = autopsyByDoctor.get(d) ?? { cuts: 0, non_cuts: 0 };
     const shiftHourPay = (out?.offHourBaseTotal ?? 0) + (inn?.offHourBaseTotal ?? 0);
-    const surgeryCount = (data: typeof outMonth.data) => data?.cases.filter(c => c.case_kind === "surgery" && data.assignments.some(a => a.date === c.date && a.slot === c.slot && a.doctor_name === d)).length ?? 0;
+    const surgeryCount = (data: typeof outMonth.data) => data?.cases.filter(c => c.case_kind === "surgery" && (c.surgeon_name ? c.surgeon_name === d : data.assignments.some(a => a.date === c.date && a.slot === c.slot && a.doctor_name === d))).length ?? 0;
     const outSurgery = surgeryCount(outMonth.data) * AUTOPSY_CUT_RATE;
     const inSurgery = surgeryCount(inMonth.data) * AUTOPSY_CUT_RATE;
     const cutPay = ap.cuts * AUTOPSY_CUT_RATE;

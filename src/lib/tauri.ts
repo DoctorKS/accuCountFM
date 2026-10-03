@@ -46,6 +46,7 @@ export interface AssignmentForExport {
 }
 
 export interface CaseForExport {
+  surgeonName?: string | null;
   caseKind?: "examination" | "surgery";
   caseName?: string;
   shiftType: ShiftType;
