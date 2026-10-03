@@ -294,13 +294,13 @@ function SimpleTable({ rows, mode, yearMonth, assignments, cases, onExportDoctor
                       <span className="h-2 w-2 rounded-full" style={{ background: DOCTOR_COLOR_HEX[r.doctor] }} />
                       {r.doctor}
                     </span>
-                    {!isOut && <button type="button" onClick={() => onExportDoctor?.(r.doctor)}
+                    <button type="button" onClick={() => onExportDoctor?.(r.doctor)}
                       disabled={!onExportDoctor || !!exportingDoctor}
                       className="ml-3 inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 disabled:opacity-50"
-                      aria-label={`Export เวรชันสูตรในของ ${r.doctor}`}>
+                      aria-label={`Export เวรชันสูตร${isOut ? "นอก" : "ใน"}ของ ${r.doctor}`}>
                       {exportingDoctor === r.doctor ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
                       Export
-                    </button>}
+                    </button>
                   </td>
                   <td className="px-4 py-3 text-center">
                     {csCount > 0 ? (
