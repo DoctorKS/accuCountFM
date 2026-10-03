@@ -31,7 +31,7 @@ export function CaseRow({ row, autoFocus = false, onAddNext }: {
         }
         flush(); onAddNext?.();
       }} className="min-w-40 flex-1 rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm" />
-    {!surgery && <label className="flex items-center gap-1 text-xs text-zinc-500">
+    {!surgery && row.shift_type === "inHos" && <label className="flex items-center gap-1 text-xs text-zinc-500">
       <span>เวลาชันสูตร</span>
       <TimePicker24 value={row.examination_time ?? null} ariaLabel="เวลาชันสูตร"
         onChange={v => upd.mutate({ id: row.id, patch: { examination_time: v } })} />
