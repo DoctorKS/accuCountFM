@@ -6,17 +6,18 @@ import { computeSlotPay, isOffHour } from "./calc";
 /** Merge consecutive off-hour slots on the same date; surgery is not an examination. */
 export function buildInHosDoctorReport(
   doctor: Doctor, yearMonth: string, assignments: AssignmentRow[], cases: CaseRow[], holidays: number[],
+  shiftType: "inHos" | "outHos" = "inHos",
 ): DoctorReportRow[] {
   const rows = assignments
-    .filter(a => a.shift_type === "inHos" && a.doctor_name === doctor && a.date.slice(0, 7) === yearMonth && isOffHour(a.date, a.slot, holidays))
+    .filter(a => a.shift_type === shiftType && a.doctor_name === doctor && a.date.slice(0, 7) === yearMonth && isOffHour(a.date, a.slot, holidays))
     .sort((a, b) => a.date.localeCompare(b.date) || a.slot.localeCompare(b.slot))
     .map(a => {
-      const examinations = cases.filter(c => c.shift_type === "inHos" && c.date === a.date && c.slot === a.slot && c.case_kind !== "surgery");
-      const pay = computeSlotPay({ shiftType: "inHos", date: a.date, slot: a.slot, doctorName: doctor },
-        examinations.map(c => ({ shiftType: "inHos", date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time })), holidays);
+      const examinations = cases.filter(c => c.shift_type === shiftType && c.date === a.date && c.slot === a.slot && c.case_kind !== "surgery");
+      const pay = computeSlotPay({ shiftType, date: a.date, slot: a.slot, doctorName: doctor },
+        examinations.map(c => ({ shiftType, date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time })), holidays);
       const [start, end] = a.slot.split("-").map(t => `${t.slice(0, 2)}.${t.slice(2)} น.`);
       return { date: a.date, start, end,
-        activity: examinations.length ? "ปฏิบัติงานชันสูตรนอกเวลา" : "เวรรับปรึกษานิติเวช",
+        activity: examinations.length ? "ปฏิบัติงานชันสูตรนอกเวลา" : shiftType === "outHos" ? "on call" : "เวรรับปรึกษานิติเวช",
         compensation: pay.base - pay.deduction };
     });
   const merged: DoctorReportRow[] = [];
@@ -29,6 +30,10 @@ export function buildInHosDoctorReport(
     } else { merged.push({ ...row }); }
   }
   return merged;
+}
+
+export function buildOutHosDoctorReport(doctor: Doctor, yearMonth: string, assignments: AssignmentRow[], cases: CaseRow[], holidays: number[]) {
+  return buildInHosDoctorReport(doctor, yearMonth, assignments, cases, holidays, "outHos");
 }
 
 /** Case payments only; legacy monthly counts have no deceased names or times. */

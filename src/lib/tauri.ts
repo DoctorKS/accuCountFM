@@ -85,6 +85,7 @@ export interface DoctorReportRow {
 }
 
 export interface DoctorReportPayload {
+  shiftType?: ShiftType;
   yearMonth: string;
   doctorFullName: string;
   savePath: string;

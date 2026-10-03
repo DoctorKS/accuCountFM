@@ -1,6 +1,6 @@
 import { computeMonthByDoctor } from "@/lib/calc-month";
 import { describe, expect, it } from "vitest";
-import { buildCaseDoctorReport, buildInHosDoctorReport } from "@/lib/doctor-report";
+import { buildCaseDoctorReport, buildInHosDoctorReport, buildOutHosDoctorReport } from "@/lib/doctor-report";
 import type { AssignmentRow, CaseRow } from "@/lib/db";
 
 const assignment: AssignmentRow = { id: 1, shift_type: "inHos", date: "2026-10-01", slot: "0000-0800", doctor_name: "กวินท์", updated_at: "" };
@@ -75,4 +75,15 @@ it("merges consecutive inHos duty slots and adds compensation with examination a
     { date: assignment.date, start: "00.00 น.", end: "24.00 น.", activity: "เวรรับปรึกษานิติเวช", compensation: 2340 }
   ]);
   expect(buildInHosDoctorReport("กวินท์", "2026-10", [morning, { ...late, date: "2026-10-02" }], [], [1])).toHaveLength(2);
+});
+
+it("exports outside duty net pay using saved time, on call text, and merged shifts", () => {
+  const outside = { ...assignment, shift_type: "outHos" as const };
+  const cases: CaseRow[] = [{ ...examination, shift_type: "outHos", leave_time: "01:00", return_time: "02:10" }];
+  expect(buildOutHosDoctorReport("กวินท์", "2026-10", [outside], cases, [])[0]).toMatchObject({ compensation: 633.75, activity: "ปฏิบัติงานชันสูตรนอกเวลา" });
+  expect(buildOutHosDoctorReport("กวินท์", "2026-10", [outside], [], [])[0]).toMatchObject({ compensation: 780, activity: "on call" });
+  expect(buildOutHosDoctorReport("กวินท์", "2026-10", [outside], [{ ...cases[0], case_kind: "surgery" }], [])[0].activity).toBe("on call");
+  const morning = { ...outside, slot: "0800-1600" as const };
+  const late = { ...outside, slot: "1600-2400" as const };
+  expect(buildOutHosDoctorReport("กวินท์", "2026-10", [morning, late], [], [1])).toEqual([{ date: outside.date, start: "08.00 น.", end: "24.00 น.", activity: "on call", compensation: 1560 }]);
 });

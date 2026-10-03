@@ -12,25 +12,13 @@ import { currentYearMonth, formatBEMonth } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
 import { useMonth, useAutopsyCounts } from "@/hooks/useShift";
 import { computeMonthByDoctor, type DoctorMonthSummary } from "@/lib/calc-month";
-import { exportMonthXlsx, exportInHosDoctorXlsx, exportCaseDoctorXlsx, type ShiftBundle } from "@/lib/tauri";
-import { buildCaseDoctorReport, buildInHosDoctorReport } from "@/lib/doctor-report";
+import { exportInHosDoctorXlsx, exportCaseDoctorXlsx } from "@/lib/tauri";
+import { buildCaseDoctorReport, buildInHosDoctorReport, buildOutHosDoctorReport } from "@/lib/doctor-report";
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker";
 import { CasesDialog } from "@/components/cases/CasesDialog";
 import type { AssignmentRow, CaseRow } from "@/lib/db";
 
 type Mode = "all" | "outHos" | "inHos";
-
-/** Convert DB-snake_case rows into the camelCase payload Rust expects. */
-function toBundle(shiftType: ShiftType, assignments: AssignmentRow[], cases: CaseRow[]): ShiftBundle {
-  return {
-    assignments: assignments.map((a) => ({
-      shiftType, date: a.date, slot: a.slot, doctorName: a.doctor_name,
-    })),
-    cases: cases.map((c) => ({
-      shiftType, surgeonName: c.surgeon_name, caseKind: c.case_kind, caseName: c.case_name, date: c.date, slot: c.slot, leaveTime: c.leave_time, returnTime: c.return_time,
-    })),
-  };
-}
 
 /**
  * /summary (mode=all) — 8 columns (per the May 2026 product change):
@@ -48,7 +36,6 @@ function toBundle(shiftType: ShiftType, assignments: AssignmentRow[], cases: Cas
  */
 export function TotalSummary({ mode }: { mode: Mode }) {
   const [ym, setYm] = useState(currentYearMonth());
-  const [exporting, setExporting] = useState(false);
   const [exportingDoctor, setExportingDoctor] = useState<Doctor | null>(null);
 
   const outMonth = useMonth("outHos", ym);
@@ -109,43 +96,20 @@ export function TotalSummary({ mode }: { mode: Mode }) {
     };
   }), [outByDoctor, inByDoctor, autopsyByDoctor, outMonth.data, inMonth.data]);
 
-  async function doExport() {
-    setExporting(true);
-    try {
-      const filename = `accuCountFM_${ym}.xlsx`;
-      const savePath = await saveDialog({
-        defaultPath: filename,
-        filters: [{ name: "Excel", extensions: ["xlsx"] }],
-      });
-      if (!savePath) { setExporting(false); return; }
-      const holidays = outMonth.data?.holidays ?? inMonth.data?.holidays ?? [];
-      const result = await exportMonthXlsx({
-        yearMonth: ym,
-        savePath,
-        holidays,
-        autopsyCounts: autopsy.data ?? [],
-        outHos: outMonth.data ? toBundle("outHos", outMonth.data.assignments, outMonth.data.cases) : null,
-        inHos: inMonth.data ? toBundle("inHos", inMonth.data.assignments, inMonth.data.cases) : null,
-      });
-      toast.success(`บันทึก ${result.path}`);
-    } catch (e) {
-      toast.error("Export ล้มเหลว: " + String(e));
-    }
-    setExporting(false);
-  }
-
   async function doExportDoctor(doctor: Doctor) {
-    if (!inMonth.data || exportingDoctor) return;
+    const data = mode === "outHos" ? outMonth.data : inMonth.data;
+    if (!data || exportingDoctor) return;
     setExportingDoctor(doctor);
     try {
       const savePath = await saveDialog({
-        defaultPath: `รายงานเวรชันสูตรใน_${doctor}_${ym}.xlsx`,
+        defaultPath: `รายงานเวรชันสูตร${mode === "outHos" ? "นอก" : "ใน"}_${doctor}_${ym}.xlsx`,
         filters: [{ name: "Excel", extensions: ["xlsx"] }],
       });
       if (!savePath) return;
       const path = await exportInHosDoctorXlsx({
         yearMonth: ym, doctorFullName: DOCTOR_FULL_NAME[doctor], savePath,
-        rows: buildInHosDoctorReport(doctor, ym, inMonth.data.assignments, inMonth.data.cases, inMonth.data.holidays),
+        shiftType: mode === "outHos" ? "outHos" : "inHos",
+        rows: (mode === "outHos" ? buildOutHosDoctorReport : buildInHosDoctorReport)(doctor, ym, data.assignments, data.cases, data.holidays),
       });
       toast.success(`บันทึก ${path}`);
     } catch (error) {
@@ -179,14 +143,7 @@ export function TotalSummary({ mode }: { mode: Mode }) {
         </div>
         <div className="flex items-end gap-3">
           <MonthYearPicker value={ym} onChange={setYm} />
-          {mode === "outHos" && <button
-            onClick={doExport}
-            disabled={exporting || outMonth.isLoading || inMonth.isLoading || autopsy.isLoading || !outMonth.data || !inMonth.data || !!autopsy.error}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            Export Excel
-          </button>}
+
         </div>
       </header>
 
@@ -197,7 +154,7 @@ export function TotalSummary({ mode }: { mode: Mode }) {
             rows={rows}
             mode={mode}
             yearMonth={ym}
-            onExportDoctor={mode === "inHos" && inMonth.data ? doExportDoctor : undefined}
+            onExportDoctor={(mode === "outHos" ? outMonth.data : inMonth.data) ? doExportDoctor : undefined}
             exportingDoctor={exportingDoctor}
             assignments={(mode === "outHos" ? outMonth.data?.assignments : inMonth.data?.assignments) ?? []}
             cases={(mode === "outHos" ? outMonth.data?.cases : inMonth.data?.cases) ?? []}

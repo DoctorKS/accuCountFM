@@ -16,6 +16,8 @@ pub struct DoctorReportRow {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DoctorReportPayload {
+    #[serde(default)]
+    pub shift_type: Option<String>,
     pub year_month: String,
     pub doctor_full_name: String,
     pub save_path: String,
@@ -73,7 +75,13 @@ pub fn write_doctor_report(payload: &DoctorReportPayload) -> Result<String, Stri
     let title = centered.clone().set_bold();
     let note = plain.clone().set_text_wrap().set_align(FormatAlign::Top);
     let write = |e: rust_xlsxwriter::XlsxError| e.to_string();
-    sheet.set_name("รายงานเวรชันสูตรใน").map_err(write)?;
+    sheet
+        .set_name(if payload.shift_type.as_deref() == Some("outHos") {
+            "รายงานเวรชันสูตรนอก"
+        } else {
+            "รายงานเวรชันสูตรใน"
+        })
+        .map_err(write)?;
     sheet.set_screen_gridlines(false);
     sheet.set_default_row_height(24);
     for (col, width) in [16.0, 12.0, 12.0, 40.0, 18.0].iter().enumerate() {
@@ -231,6 +239,7 @@ mod tests {
                 .into_owned()
         });
         let mut payload = DoctorReportPayload {
+            shift_type: None,
             year_month: "2026-10".into(),
             doctor_full_name: "นายแพทย์กวินท์  ศัลย์วิเศษ".into(),
             save_path: path.clone(),
@@ -265,6 +274,7 @@ mod tests {
         let path =
             std::env::temp_dir().join(format!("empty-doctor-report-{}.xlsx", std::process::id()));
         let payload = DoctorReportPayload {
+            shift_type: None,
             year_month: "2026-10".into(),
             doctor_full_name: "นายแพทย์อนิรุต  วรวาท".into(),
             save_path: path.to_string_lossy().into_owned(),
