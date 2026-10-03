@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight, Download, Loader2 } from "lucide-react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
@@ -10,7 +10,7 @@ import {
 } from "@/lib/constants";
 import { currentYearMonth, formatBEMonth } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
-import { useMonth, useAutopsyCounts, useUpsertAutopsyCount } from "@/hooks/useShift";
+import { useMonth, useAutopsyCounts } from "@/hooks/useShift";
 import { computeMonthByDoctor, type DoctorMonthSummary } from "@/lib/calc-month";
 import { exportMonthXlsx, exportInHosDoctorXlsx, exportCaseDoctorXlsx, type ShiftBundle } from "@/lib/tauri";
 import { buildCaseDoctorReport, buildInHosDoctorReport } from "@/lib/doctor-report";
@@ -190,10 +190,9 @@ export function TotalSummary({ mode }: { mode: Mode }) {
         </div>
       </header>
 
-      {mode === "all" && <p className="text-xs text-zinc-500">เคสผ่ารายวันรวมอัตโนมัติในค่าผ่าชันสูตร · ช่องผ่าเดิมใช้เฉพาะยอดที่เคยบันทึกแยก กรุณาไม่กรอกเคสรายวันซ้ำ</p>}
       {(outMonth.error || inMonth.error || autopsy.error) && <p role="alert" className="text-sm text-rose-600">โหลดข้อมูลล้มเหลว: {String(outMonth.error ?? inMonth.error ?? autopsy.error)}</p>}
       {mode === "all"
-        ? <AllTable rows={rows} yearMonth={ym} onExportDoctor={outMonth.data && inMonth.data ? doExportCases : undefined} exportingDoctor={exportingDoctor} />
+        ? <AllTable rows={rows} onExportDoctor={outMonth.data && inMonth.data ? doExportCases : undefined} exportingDoctor={exportingDoctor} />
         : <SimpleTable
             rows={rows}
             mode={mode}
@@ -209,7 +208,7 @@ export function TotalSummary({ mode }: { mode: Mode }) {
 
 /* ───── Full 8-column table for /summary ───────────────────────────────── */
 
-function AllTable({ rows, yearMonth, onExportDoctor, exportingDoctor }: {
+function AllTable({ rows, onExportDoctor, exportingDoctor }: {
   onExportDoctor?: (doctor: Doctor) => void;
   exportingDoctor: Doctor | null;
   rows: Array<{
@@ -223,7 +222,6 @@ function AllTable({ rows, yearMonth, onExportDoctor, exportingDoctor }: {
     inTotal: number;
     grand: number;
   }>;
-  yearMonth: string;
 }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white shadow-sm">
@@ -231,10 +229,7 @@ function AllTable({ rows, yearMonth, onExportDoctor, exportingDoctor }: {
         <thead className="bg-zinc-50 text-xs uppercase text-zinc-500">
           <tr>
             <th className="px-3 py-3 text-left">แพทย์</th>
-            <th className="px-3 py-3 text-center">ผ่าเดิม</th>
-            <th className="px-3 py-3 text-center">ผ่าไม่ตัดเนื้อ</th>
             <th className="px-3 py-3 text-right">ค่าชม.เวรนอกเวลา</th>
-            <th className="px-3 py-3 text-right">ค่าชันสูตร + ผ่าไม่ตัดเนื้อ</th>
             <th className="px-3 py-3 text-right">ค่าเวรชันสูตรนอก</th>
             <th className="px-3 py-3 text-right">ค่าเวรชันสูตรใน</th>
             <th className="px-3 py-3 text-right">ค่าผ่าชันสูตร</th>
@@ -254,14 +249,7 @@ function AllTable({ rows, yearMonth, onExportDoctor, exportingDoctor }: {
                   {exportingDoctor === r.doctor ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} Export Excel
                 </button>
               </td>
-              <td className="px-3 py-2 text-center">
-                <AutopsyInput yearMonth={yearMonth} doctor={r.doctor} field="cuts" value={r.cuts} />
-              </td>
-              <td className="px-3 py-2 text-center">
-                <AutopsyInput yearMonth={yearMonth} doctor={r.doctor} field="non_cuts" value={r.nonCuts} />
-              </td>
               <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(r.shiftHourPay)}</td>
-              <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(r.bonusPlusAutopsy)}</td>
               <td className="px-3 py-3 text-right tabular-nums text-violet-700">{fmtBaht(r.outTotal)}</td>
               <td className="px-3 py-3 text-right tabular-nums text-emerald-700">{fmtBaht(r.inTotal)}</td>
               <td className="px-3 py-3 text-right tabular-nums text-[#455766]">{fmtBaht(r.surgeryPay)}</td>
@@ -271,9 +259,8 @@ function AllTable({ rows, yearMonth, onExportDoctor, exportingDoctor }: {
         </tbody>
         <tfoot className="bg-zinc-50 text-sm font-semibold">
           <tr>
-            <td className="px-3 py-3 text-right text-zinc-600" colSpan={3}>รวมทั้งหมด</td>
+            <td className="px-3 py-3 text-right text-zinc-600" >รวมทั้งหมด</td>
             <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(sum(rows, "shiftHourPay"))}</td>
-            <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(sum(rows, "bonusPlusAutopsy"))}</td>
             <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(sum(rows, "outTotal"))}</td>
             <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(sum(rows, "inTotal"))}</td>
             <td className="px-3 py-3 text-right tabular-nums">{fmtBaht(sum(rows, "surgeryPay"))}</td>
@@ -287,45 +274,6 @@ function AllTable({ rows, yearMonth, onExportDoctor, exportingDoctor }: {
 
 function sum<T, K extends keyof T>(arr: T[], key: K): number {
   return arr.reduce<number>((acc, x) => acc + (x[key] as unknown as number), 0);
-}
-
-/** Editable integer for ผ่า / ผ่าไม่ตัดเนื้อ. Flush on blur or Enter. */
-function AutopsyInput({
-  yearMonth, doctor, field, value,
-}: {
-  yearMonth: string;
-  doctor: Doctor;
-  field: "cuts" | "non_cuts";
-  value: number;
-}) {
-  const [local, setLocal] = useState(String(value));
-  const upsert = useUpsertAutopsyCount();
-
-  // Resync local input when the upstream value changes (e.g. after the
-  // mutation's invalidation re-fetches and we get the persisted number back).
-  // Was a useMemo before — that fires during render and doesn't reliably
-  // catch the refetch round-trip, so the UI looked frozen even after save.
-  useEffect(() => { setLocal(String(value)); }, [value]);
-
-  const flush = () => {
-    const n = parseInt(local || "0", 10);
-    if (Number.isNaN(n) || n < 0) { setLocal(String(value)); return; }
-    if (n === value) return;
-    upsert.mutate({ yearMonth, doctorName: doctor, patch: { [field]: n } });
-  };
-
-  return (
-    <input
-      type="number"
-      min={0}
-      step={1}
-      value={local}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={flush}
-      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-      className="w-16 rounded-md border border-zinc-200 bg-white px-2 py-1 text-center text-sm tabular-nums focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-200"
-    />
-  );
 }
 
 /* ───── Simpler table for /summary/out and /summary/in ─────────────────── */
