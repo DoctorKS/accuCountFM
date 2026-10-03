@@ -20,7 +20,8 @@ export function CaseRow({ row, autoFocus = false, onAddNext }: {
   const flush = () => {
     if (name.trim() !== row.case_name) upd.mutate({ id: row.id, patch: { case_name: name.trim() } });
   };
-  return <div className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50/50 p-2">
+  return <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 p-2">
+    <div className="flex items-center gap-2 overflow-x-auto [&>label]:shrink-0 [&>select]:shrink-0 [&>button]:shrink-0">
     <input ref={input} aria-label="ชื่อ นามสกุล" placeholder="ชื่อ นามสกุล" value={name}
       onChange={e => setName(e.target.value)} onBlur={flush}
       onKeyDown={e => {
@@ -36,16 +37,6 @@ export function CaseRow({ row, autoFocus = false, onAddNext }: {
       <TimePicker24 value={row.examination_time ?? null} ariaLabel="เวลาชันสูตร"
         onChange={v => upd.mutate({ id: row.id, patch: { examination_time: v } })} />
     </label>}
-    <div className="flex max-w-full items-center gap-2 overflow-x-auto [&>label]:shrink-0 [&>select]:shrink-0">
-    <select aria-label={surgery ? "เวรที่รับค่าผ่า" : "ประเภทชันสูตร"} value={row.shift_type}
-      onChange={e => upd.mutate({ id: row.id, patch: {
-        shift_type: e.target.value as ShiftType,
-        ...(!surgery && e.target.value === "inHos" ? { leave_time: null, return_time: null } : {}),
-      } })} className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm">
-      <option value="inHos">{surgery ? "แพทย์เวรใน รพ." : "ชันสูตรในโรงพยาบาล"}</option>
-      <option value="outHos">{surgery ? "แพทย์เวรนอก รพ." : "ชันสูตรนอกโรงพยาบาล"}</option>
-    </select>
-    {surgery && <span className="text-xs font-semibold text-[#455766]">เคสผ่า</span>}
     {showTimes && <>
       <label className="flex items-center gap-1 text-xs text-zinc-500">
         <span>{surgery ? "เริ่มผ่า" : "ออก"}</span>
@@ -58,8 +49,18 @@ export function CaseRow({ row, autoFocus = false, onAddNext }: {
           onChange={v => upd.mutate({ id: row.id, patch: { return_time: v } })} />
       </label>
     </>}
-    </div>
+    <select aria-label={surgery ? "เวรที่รับค่าผ่า" : "ประเภทชันสูตร"} value={row.shift_type}
+      onChange={e => upd.mutate({ id: row.id, patch: {
+        shift_type: e.target.value as ShiftType,
+        ...(!surgery && e.target.value === "inHos" ? { leave_time: null, return_time: null } : {}),
+      } })} className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm">
+      <option value="inHos">{surgery ? "แพทย์เวรใน รพ." : "ชันสูตรในโรงพยาบาล"}</option>
+      <option value="outHos">{surgery ? "แพทย์เวรนอก รพ." : "ชันสูตรนอกโรงพยาบาล"}</option>
+    </select>
+    {surgery && <span className="text-xs font-semibold text-[#455766]">เคสผ่า</span>}
+
     <button type="button" aria-label="ลบเคส" onClick={() => del.mutate(row.id)} className="rounded-md p-1.5 text-rose-500 hover:bg-rose-50"><Trash2 className="h-4 w-4" /></button>
+    </div>
     {upd.error && <p role="alert" className="w-full text-xs text-rose-600">บันทึกล้มเหลว: {String(upd.error)}</p>}
   </div>;
 }
