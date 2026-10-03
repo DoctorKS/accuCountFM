@@ -36,6 +36,7 @@ export function CaseRow({ row, autoFocus = false, onAddNext }: {
       <TimePicker24 value={row.examination_time ?? null} ariaLabel="เวลาชันสูตร"
         onChange={v => upd.mutate({ id: row.id, patch: { examination_time: v } })} />
     </label>}
+    <div className="flex max-w-full items-center gap-2 overflow-x-auto [&>label]:shrink-0 [&>select]:shrink-0">
     <select aria-label={surgery ? "เวรที่รับค่าผ่า" : "ประเภทชันสูตร"} value={row.shift_type}
       onChange={e => upd.mutate({ id: row.id, patch: {
         shift_type: e.target.value as ShiftType,
@@ -57,6 +58,7 @@ export function CaseRow({ row, autoFocus = false, onAddNext }: {
           onChange={v => upd.mutate({ id: row.id, patch: { return_time: v } })} />
       </label>
     </>}
+    </div>
     <button type="button" aria-label="ลบเคส" onClick={() => del.mutate(row.id)} className="rounded-md p-1.5 text-rose-500 hover:bg-rose-50"><Trash2 className="h-4 w-4" /></button>
     {upd.error && <p role="alert" className="w-full text-xs text-rose-600">บันทึกล้มเหลว: {String(upd.error)}</p>}
   </div>;
