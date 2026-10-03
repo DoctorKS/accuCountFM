@@ -142,12 +142,12 @@ export function OcrDialog({ yearMonth, onClose }: { yearMonth: string; onClose: 
             )}
           </div>
 
-          {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700 ring-1 ring-rose-200">{error}</div>}
+          {error && !result && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700 ring-1 ring-rose-200">{error}</div>}
           {error?.includes("API Key") && (
             <Link to="/settings" onClick={onClose} className="text-xs text-violet-700 underline">ไปหน้าตั้งค่า →</Link>
           )}
 
-          {result && <OcrPreview result={result} disabled={busy !== "idle"} onChange={editDoctor} />}
+          {result && <OcrPreview result={result} error={error} disabled={busy !== "idle"} onChange={editDoctor} />}
         </div>
 
         {result && (
@@ -171,14 +171,18 @@ export function OcrDialog({ yearMonth, onClose }: { yearMonth: string; onClose: 
   );
 }
 
-export function OcrPreview({ result, disabled = false, onChange }: {
-  result: OcrResult; disabled?: boolean;
+export function OcrPreview({ result, error, disabled = false, onChange }: {
+  result: OcrResult; error?: string | null; disabled?: boolean;
   onChange: (day: number, slot: Slot, type: ShiftType, name: string) => void;
 }) {
   const slots: Slot[] = ["0000-0800", "0800-1600", "1600-2400"];
-  return <div className="overflow-x-auto rounded-xl border border-zinc-200">
+  return <div className="max-h-[45vh] overflow-auto rounded-xl border border-zinc-200">
     <table className="w-full text-xs">
-      <thead className="bg-zinc-50"><tr>
+      <thead className="sticky top-0 z-10 bg-zinc-50 shadow-sm">
+        {error && <tr><th colSpan={7} className="bg-white p-2 text-left font-normal">
+          <div role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700 ring-1 ring-rose-200">{error}</div>
+        </th></tr>}
+        <tr>
         <th className="px-2 py-2">วันที่</th>
         {slots.flatMap(slot => (["outHos", "inHos"] as const).map(type =>
           <th key={slot + type} className="px-2 py-2">{slot.slice(0, 2)}-{slot.slice(5, 7)} {type === "outHos" ? "นอก" : "ใน"}</th>))}
