@@ -32,12 +32,12 @@ export function BuddhistDatePicker({ value, onChange }: { value: string; onChang
   };
   return <div ref={wrap} className="relative inline-block">
     <div className="flex items-center gap-2">
-    <button type="button" aria-label="วันก่อนหน้า" onClick={() => moveDay(-1)} className="rounded-lg border border-zinc-300 bg-white p-2 text-zinc-600 hover:bg-violet-50"><ChevronLeft className="h-5 w-5" /></button>
+    <button type="button" aria-label="วันก่อนหน้า" onClick={() => moveDay(-1)} className="p-1 text-zinc-600 hover:text-violet-600"><ChevronLeft className="h-2.5 w-2.5" /></button>
     <button type="button" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}
       className="inline-flex items-center gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xl font-bold shadow-sm hover:border-violet-400">
       <Calendar className="h-5 w-5 text-violet-500" />{formatBEFullDate(value)}
     </button>
-    <button type="button" aria-label="วันถัดไป" onClick={() => moveDay(1)} className="rounded-lg border border-zinc-300 bg-white p-2 text-zinc-600 hover:bg-violet-50"><ChevronRight className="h-5 w-5" /></button>
+    <button type="button" aria-label="วันถัดไป" onClick={() => moveDay(1)} className="p-1 text-zinc-600 hover:text-violet-600"><ChevronRight className="h-2.5 w-2.5" /></button>
     </div>
     {open && <div role="dialog" aria-label="เลือกวันที่ พ.ศ." className="absolute left-1/2 top-full z-40 mt-2 w-80 max-w-[90vw] -translate-x-1/2 rounded-xl border border-zinc-200 bg-white p-3 shadow-xl">
       <div className="mb-3 flex items-end justify-between">
