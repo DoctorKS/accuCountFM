@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { SLOTS, type ShiftType, type Slot, CASE_BONUS_OUT_HOS, CASE_BONUS_IN_HOS } from "@/lib/constants";
 import { formatBEFullDate } from "@/lib/buddhist";
+import { BuddhistDatePicker } from "@/components/ui/BuddhistDatePicker";
 import { fmtBaht } from "@/lib/utils";
 import { useMergedMonth, useAddCase } from "@/hooks/useShift";
 import { computeDay } from "@/lib/calc-month";
@@ -138,7 +139,9 @@ export function ShiftDayPage() {
           <ArrowLeft className="h-4 w-4" /> กลับไปหน้าก่อน
         </Link>
         <div className="text-center">
-          <h1 className="text-xl font-bold">{date ? formatBEFullDate(date) : "—"}</h1>
+          <h1>{date ? <BuddhistDatePicker value={date} onChange={next => {
+            if (next !== date && guardBack()) navigate(`/shift/${type ?? "out"}/${next}`);
+          }} /> : "—"}</h1>
         </div>
         <div className="w-44 text-right text-[10px] text-zinc-400 leading-tight">
           <div>กด PageDown เพื่อกลับ</div>
