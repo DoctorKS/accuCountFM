@@ -20,3 +20,31 @@ export function buildInHosDoctorReport(
         compensation: pay.base - pay.deduction };
     });
 }
+
+/** Case payments only; legacy monthly counts have no deceased names or times. */
+export function buildCaseDoctorReport(
+  doctor: Doctor, yearMonth: string, assignments: AssignmentRow[], cases: CaseRow[],
+): import("./tauri").CaseReportRow[] {
+  const assigned = new Set(assignments.filter(a => a.doctor_name === doctor)
+    .map(a => `${a.shift_type}|${a.date}|${a.slot}`));
+  const time = (value: string | null | undefined, name: string) => {
+    if (!value || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value))
+      throw new Error(`กรุณาบันทึกเวลาให้ครบสำหรับ ${name}`);
+    return value;
+  };
+  return cases.filter(c => c.date.slice(0, 7) === yearMonth && assigned.has(`${c.shift_type}|${c.date}|${c.slot}`))
+    .map(c => {
+      if (!c.case_name.trim()) throw new Error(`กรุณาบันทึกชื่อผู้เสียชีวิตวันที่ ${c.date}`);
+      const surgery = c.case_kind === "surgery";
+      const inside = c.shift_type === "inHos";
+      const start = time(!surgery && inside ? c.examination_time : c.leave_time, c.case_name);
+      const minutes = Number(start.slice(0, 2)) * 60 + Number(start.slice(3)) + 10;
+      const end = !surgery && inside
+        ? `${String(Math.floor(minutes / 60) % 24).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`
+        : time(c.return_time, c.case_name);
+      return { date: c.date, start: start.replace(":", ".") + " น.", end: end.replace(":", ".") + " น.",
+        activity: surgery ? "ผ่าตรวจภายในและตรวจชิ้นเนื้อศพ" : inside
+          ? "ชันสูตรพลิกศพในโรงพยาบาลพระปกเกล้า" : "ชันสูตรพลิกศพนอกโรงพยาบาลพระปกเกล้า",
+        deceasedName: c.case_name, compensation: surgery ? 4500 : inside ? 1200 : 1800 };
+    }).sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildInHosDoctorReport } from "@/lib/doctor-report";
+import { buildCaseDoctorReport, buildInHosDoctorReport } from "@/lib/doctor-report";
 import type { AssignmentRow, CaseRow } from "@/lib/db";
 
 const assignment: AssignmentRow = { id: 1, shift_type: "inHos", date: "2026-10-01", slot: "0000-0800", doctor_name: "กวินท์", updated_at: "" };
@@ -31,5 +31,26 @@ describe("per-doctor inHos report", () => {
     expect(rows.map(r => r.start)).toEqual(["00.00 น.", "16.00 น."]);
     expect(rows[1].end).toBe("24.00 น.");
     expect(buildInHosDoctorReport("อนิรุต", "2026-10", [assignment], [], [])).toEqual([]);
+  });
+});
+
+describe("case report", () => {
+  it("includes all three types with their own times and fees, scoped to the assigned doctor", () => {
+    const outside = { ...assignment, shift_type: "outHos" as const };
+    const cases: CaseRow[] = [
+      { ...examination, examination_time: "23:55" },
+      { ...examination, shift_type: "outHos", leave_time: "09:15", return_time: "10:30" },
+      { ...examination, case_kind: "surgery", leave_time: "11:00", return_time: "12:00" },
+    ];
+    const rows = buildCaseDoctorReport("กวินท์", "2026-10", [assignment, outside], cases);
+    expect(rows.map(r => r.compensation)).toEqual([1800, 4500, 1200]);
+    expect(rows[2].end).toBe("00.05 น.");
+    expect(rows[1].activity).toBe("ผ่าตรวจภายในและตรวจชิ้นเนื้อศพ");
+    expect(rows.reduce((s,r) => s+r.compensation,0)).toBe(7500);
+    expect(buildCaseDoctorReport("อนิรุต", "2026-10", [assignment, outside], cases)).toEqual([]);
+    expect(buildCaseDoctorReport("กวินท์", "2026-09", [assignment, outside], cases)).toEqual([]);
+  });
+  it("requires saved times instead of inventing missing legacy data", () => {
+    expect(() => buildCaseDoctorReport("กวินท์", "2026-10", [assignment], [examination])).toThrow("กรุณาบันทึกเวลา");
   });
 });

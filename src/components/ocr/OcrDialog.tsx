@@ -5,8 +5,8 @@ import { toast } from "sonner";
 import { ocrRun, hasApiKey, type OcrResult, type OcrSlot } from "@/lib/tauri";
 import { isOffHour } from "@/lib/calc";
 import { setAssignmentDoctor, listMonthHolidays } from "@/lib/db";
-import { isDoctor, DOCTOR_BG_CLASS, type Doctor } from "@/lib/doctors";
-import type { Slot } from "@/lib/constants";
+import { isDoctor, DOCTORS, DOCTOR_BG_CLASS } from "@/lib/doctors";
+import type { Slot, ShiftType } from "@/lib/constants";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatBEMonth } from "@/lib/buddhist";
 import { Link } from "react-router-dom";
@@ -63,6 +63,12 @@ export function OcrDialog({ yearMonth, onClose }: { yearMonth: string; onClose: 
     setBusy("idle");
   }
 
+  function editDoctor(day: number, slot: Slot, type: ShiftType, name: string) {
+    setResult(previous => previous && ({ ...previous, days: previous.days.map(d =>
+      d.date === day ? { ...d, shifts: { ...d.shifts, [slot]: { ...d.shifts[slot], [type]: name } } } : d) }));
+    setError(null);
+  }
+
   async function apply() {
     if (!result) return;
     setBusy("apply");
@@ -108,7 +114,7 @@ export function OcrDialog({ yearMonth, onClose }: { yearMonth: string; onClose: 
           <ol className="text-xs text-zinc-500">
             <li>1. เลือกรูปตารางเวรของเดือนนี้</li>
             <li>2. กด "ส่งให้ OCR อ่าน" — Claude vision จะคืนข้อมูล</li>
-            <li>3. ตรวจ preview แล้วกด "ยืนยัน" เพื่อเติมเข้าตาราง (ทับของเดิม)</li>
+            <li>3. ตรวจ preview และแก้ชื่อแพทย์จาก dropdown แล้วกด "ยืนยัน" เพื่อเติมเข้าตาราง (ทับของเดิม)</li>
           </ol>
 
           <div className="rounded-xl border-2 border-dashed border-zinc-300 p-6">
@@ -141,7 +147,7 @@ export function OcrDialog({ yearMonth, onClose }: { yearMonth: string; onClose: 
             <Link to="/settings" onClick={onClose} className="text-xs text-violet-700 underline">ไปหน้าตั้งค่า →</Link>
           )}
 
-          {result && <OcrPreview result={result} />}
+          {result && <OcrPreview result={result} disabled={busy !== "idle"} onChange={editDoctor} />}
         </div>
 
         {result && (
@@ -165,44 +171,34 @@ export function OcrDialog({ yearMonth, onClose }: { yearMonth: string; onClose: 
   );
 }
 
-function OcrPreview({ result }: { result: OcrResult }) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200">
-      <table className="w-full text-xs">
-        <thead className="bg-zinc-50">
-          <tr>
-            <th className="px-2 py-2">วันที่</th>
-            <th className="px-2 py-2">00-08 นอก</th>
-            <th className="px-2 py-2">00-08 ใน</th>
-            <th className="px-2 py-2">08-16 นอก</th>
-            <th className="px-2 py-2">08-16 ใน</th>
-            <th className="px-2 py-2">16-24 นอก</th>
-            <th className="px-2 py-2">16-24 ใน</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100">
-          {result.days.map((d) => (
-            <tr key={d.date} className="hover:bg-zinc-50">
-              <td className="px-2 py-1 text-center font-mono">{d.date} ({d.weekday})</td>
-              <Cell name={d.shifts["0000-0800"].outHos} />
-              <Cell name={d.shifts["0000-0800"].inHos} />
-              <Cell name={d.shifts["0800-1600"].outHos} />
-              <Cell name={d.shifts["0800-1600"].inHos} />
-              <Cell name={d.shifts["1600-2400"].outHos} />
-              <Cell name={d.shifts["1600-2400"].inHos} />
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function Cell({ name }: { name: string }) {
-  if (!name) return <td className="px-2 py-1 text-center text-zinc-300">—</td>;
-  if (!isDoctor(name)) {
-    return <td className="px-2 py-1 text-center text-rose-600" title="ชื่อไม่อยู่ในรายการ">{name}</td>;
-  }
-  const d = name as Doctor;
-  return <td className={`px-2 py-1 text-center text-zinc-800 ${DOCTOR_BG_CLASS[d]}`}>{name}</td>;
+export function OcrPreview({ result, disabled = false, onChange }: {
+  result: OcrResult; disabled?: boolean;
+  onChange: (day: number, slot: Slot, type: ShiftType, name: string) => void;
+}) {
+  const slots: Slot[] = ["0000-0800", "0800-1600", "1600-2400"];
+  return <div className="overflow-x-auto rounded-xl border border-zinc-200">
+    <table className="w-full text-xs">
+      <thead className="bg-zinc-50"><tr>
+        <th className="px-2 py-2">วันที่</th>
+        {slots.flatMap(slot => (["outHos", "inHos"] as const).map(type =>
+          <th key={slot + type} className="px-2 py-2">{slot.slice(0, 2)}-{slot.slice(5, 7)} {type === "outHos" ? "นอก" : "ใน"}</th>))}
+      </tr></thead>
+      <tbody className="divide-y divide-zinc-100">{result.days.map(d => <tr key={d.date}>
+        <td className="px-2 py-1 text-center font-mono">{d.date} ({d.weekday})</td>
+        {slots.flatMap(slot => (["outHos", "inHos"] as const).map(type => {
+          const name = d.shifts[slot][type];
+          return <td key={slot + type} className={`px-1 py-1 ${isDoctor(name) ? DOCTOR_BG_CLASS[name] : "bg-rose-50"}`}>
+            <select value={name} disabled={disabled}
+              aria-label={`วันที่ ${d.date} ${slot} ${type === "outHos" ? "ชันสูตรนอก" : "ชันสูตรใน"}`}
+              onChange={e => onChange(d.date, slot, type, e.target.value)}
+              className="w-full min-w-20 rounded border border-zinc-200 bg-white/70 px-1 py-1 text-xs disabled:opacity-50">
+              <option value="">— ไม่ระบุ —</option>
+              {name && !isDoctor(name) && <option value={name}>ชื่อไม่ถูกต้อง: {name}</option>}
+              {DOCTORS.map(doctor => <option key={doctor} value={doctor}>{doctor}</option>)}
+            </select>
+          </td>;
+        }))}
+      </tr>)}</tbody>
+    </table>
+  </div>;
 }

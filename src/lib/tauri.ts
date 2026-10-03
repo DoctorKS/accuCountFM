@@ -92,3 +92,8 @@ export interface DoctorReportPayload {
 
 export const exportInHosDoctorXlsx = (payload: DoctorReportPayload) =>
   invoke<string>("export_in_hos_doctor_xlsx", { payload });
+
+export interface CaseReportRow extends DoctorReportRow { deceasedName: string }
+export interface CaseReportPayload extends Omit<DoctorReportPayload, "rows"> { rows: CaseReportRow[] }
+export const exportCaseDoctorXlsx = (payload: CaseReportPayload) =>
+  invoke<string>("export_case_doctor_xlsx", { payload });

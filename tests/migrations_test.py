@@ -12,6 +12,12 @@ class MigrationTests(unittest.TestCase):
         self.db.execute("INSERT INTO shift_cases(shift_type,date,slot,case_name) VALUES ('outHos','2026-05-12','0000-0800','123/69')")
         self.db.executescript((ROOT / "src-tauri/migrations/0004_surgery_cases.sql").read_text(encoding="utf-8"))
 
+    def test_examination_time_migration_preserves_cases(self):
+        self.db.executescript((ROOT / "src-tauri/migrations/0005_examination_time.sql").read_text(encoding="utf-8"))
+        self.assertEqual(self.db.execute("SELECT case_name,examination_time FROM shift_cases").fetchone(), ('123/69', None))
+        self.db.execute("UPDATE shift_cases SET examination_time='08:15'")
+        self.assertEqual(self.db.execute("SELECT examination_time FROM shift_cases").fetchone()[0], '08:15')
+
     def assign(self, typ, date, slot):
         self.db.execute("INSERT INTO shift_assignments(shift_type,date,slot,doctor_name) VALUES (?,?,?,'doctor')", (typ,date,slot))
 

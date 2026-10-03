@@ -12,8 +12,8 @@ import { currentYearMonth, formatBEMonth } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
 import { useMonth, useAutopsyCounts, useUpsertAutopsyCount } from "@/hooks/useShift";
 import { computeMonthByDoctor, type DoctorMonthSummary } from "@/lib/calc-month";
-import { exportMonthXlsx, exportInHosDoctorXlsx, type ShiftBundle } from "@/lib/tauri";
-import { buildInHosDoctorReport } from "@/lib/doctor-report";
+import { exportMonthXlsx, exportInHosDoctorXlsx, exportCaseDoctorXlsx, type ShiftBundle } from "@/lib/tauri";
+import { buildCaseDoctorReport, buildInHosDoctorReport } from "@/lib/doctor-report";
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker";
 import { CasesDialog } from "@/components/cases/CasesDialog";
 import type { AssignmentRow, CaseRow } from "@/lib/db";
@@ -155,6 +155,21 @@ export function TotalSummary({ mode }: { mode: Mode }) {
     }
   }
 
+  async function doExportCases(doctor: Doctor) {
+    if (!outMonth.data || !inMonth.data) return;
+    setExportingDoctor(doctor);
+    try {
+      const reportRows = buildCaseDoctorReport(doctor, ym,
+        [...outMonth.data.assignments, ...inMonth.data.assignments],
+        [...outMonth.data.cases, ...inMonth.data.cases]);
+      const savePath = await saveDialog({ defaultPath: `รายงานเคส_${doctor}_${ym}.xlsx`, filters: [{ name: "Excel", extensions: ["xlsx"] }] });
+      if (!savePath) return;
+      const path = await exportCaseDoctorXlsx({ yearMonth: ym, doctorFullName: DOCTOR_FULL_NAME[doctor], savePath, rows: reportRows });
+      toast.success(`บันทึก ${path}`);
+    } catch (error) { toast.error("Export ล้มเหลว: " + String(error)); }
+    finally { setExportingDoctor(null); }
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <header className="flex items-end justify-between">
@@ -164,7 +179,7 @@ export function TotalSummary({ mode }: { mode: Mode }) {
         </div>
         <div className="flex items-end gap-3">
           <MonthYearPicker value={ym} onChange={setYm} />
-          {mode !== "inHos" && <button
+          {mode === "outHos" && <button
             onClick={doExport}
             disabled={exporting || outMonth.isLoading || inMonth.isLoading || autopsy.isLoading || !outMonth.data || !inMonth.data || !!autopsy.error}
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
@@ -178,7 +193,7 @@ export function TotalSummary({ mode }: { mode: Mode }) {
       {mode === "all" && <p className="text-xs text-zinc-500">เคสผ่ารายวันรวมอัตโนมัติในค่าผ่าชันสูตร · ช่องผ่าเดิมใช้เฉพาะยอดที่เคยบันทึกแยก กรุณาไม่กรอกเคสรายวันซ้ำ</p>}
       {(outMonth.error || inMonth.error || autopsy.error) && <p role="alert" className="text-sm text-rose-600">โหลดข้อมูลล้มเหลว: {String(outMonth.error ?? inMonth.error ?? autopsy.error)}</p>}
       {mode === "all"
-        ? <AllTable rows={rows} yearMonth={ym} />
+        ? <AllTable rows={rows} yearMonth={ym} onExportDoctor={outMonth.data && inMonth.data ? doExportCases : undefined} exportingDoctor={exportingDoctor} />
         : <SimpleTable
             rows={rows}
             mode={mode}
@@ -194,7 +209,9 @@ export function TotalSummary({ mode }: { mode: Mode }) {
 
 /* ───── Full 8-column table for /summary ───────────────────────────────── */
 
-function AllTable({ rows, yearMonth }: {
+function AllTable({ rows, yearMonth, onExportDoctor, exportingDoctor }: {
+  onExportDoctor?: (doctor: Doctor) => void;
+  exportingDoctor: Doctor | null;
   rows: Array<{
     doctor: Doctor;
     cuts: number;
@@ -232,6 +249,10 @@ function AllTable({ rows, yearMonth }: {
                   <span className="h-2 w-2 rounded-full" style={{ background: DOCTOR_COLOR_HEX[r.doctor] }} />
                   {r.doctor}
                 </span>
+                <button onClick={() => onExportDoctor?.(r.doctor)} disabled={!onExportDoctor || exportingDoctor !== null}
+                  className="ml-2 inline-flex items-center gap-1 rounded border border-emerald-200 px-2 py-1 text-xs text-emerald-700 disabled:opacity-50">
+                  {exportingDoctor === r.doctor ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} Export Excel
+                </button>
               </td>
               <td className="px-3 py-2 text-center">
                 <AutopsyInput yearMonth={yearMonth} doctor={r.doctor} field="cuts" value={r.cuts} />

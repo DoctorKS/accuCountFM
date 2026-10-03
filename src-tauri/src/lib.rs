@@ -10,6 +10,7 @@
 // it in TS for live preview, but persisted totals must come from here.
 
 pub mod calc;
+pub mod case_report;
 pub mod doctor_report;
 pub mod excel;
 pub mod keys;
@@ -44,6 +45,12 @@ pub fn run() {
             sql: include_str!("../migrations/0004_surgery_cases.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "examination time",
+            sql: include_str!("../migrations/0005_examination_time.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -72,6 +79,7 @@ pub fn run() {
             commands::ocr_run,
             commands::export_month_xlsx,
             commands::export_in_hos_doctor_xlsx,
+            commands::export_case_doctor_xlsx,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -137,6 +145,13 @@ mod commands {
             return Err(format!("ไม่พบไฟล์: {}", path.display()));
         }
         ocr::run_ocr(&path, &year_month, &key, holidays.as_deref().unwrap_or(&[])).await
+    }
+
+    #[tauri::command]
+    pub fn export_case_doctor_xlsx(
+        payload: crate::case_report::CaseReportPayload,
+    ) -> Result<String, String> {
+        crate::case_report::write_case_report(&payload)
     }
 
     // ─── Excel export ───────────────────────────────────────────────────────
