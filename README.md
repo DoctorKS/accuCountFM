@@ -170,6 +170,9 @@ npm run tauri:dev       # hot-reload dev mode
 เพื่อให้ทดลองใช้งานก่อน สร้างไฟล์ EXE สำหรับแจกจ่ายและ installer เฉพาะเมื่อผู้ใช้
 สั่งให้สร้างอย่างชัดเจนเท่านั้น การสั่ง commit/push ไม่ถือเป็นคำสั่งสร้าง EXE หรือ installer
 
+เมื่อผู้ใช้พิมพ์ `RUN` หมายถึงให้เปิดโปรแกรมทันทีในโหมดพัฒนา (`npm run tauri:dev`)
+โดยไม่สร้าง EXE สำหรับแจกจ่ายหรือ installer
+
 ```powershell
 npm run tauri:build
 # Output:
