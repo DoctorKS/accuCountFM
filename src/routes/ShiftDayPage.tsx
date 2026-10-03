@@ -189,7 +189,10 @@ export function ShiftDayPage() {
 
               {/* Per-slot breakdown cards */}
               <div className="space-y-2">
-                {SLOTS.flatMap((slot: Slot) => (["inHos", "outHos"] as const).map(st => {
+                {SLOTS.map((slot: Slot) => <section key={slot} aria-label={slot.replace("-", "–")}
+                  className="space-y-2 rounded-xl border border-zinc-300 bg-zinc-50 p-2">
+                  <h4 className="px-1 text-xs font-semibold text-zinc-600">{slot.slice(0, 2)}.00 – {slot.slice(5, 7)}.00 น.</h4>
+                  {(["inHos", "outHos"] as const).map(st => {
                   const c = (st === "outHos" ? day : inDay)?.slots[slot] ?? null;
                   if (!c) return (
                     <div key={`${st}-${slot}`} className="rounded-xl bg-white/60 px-3 py-2 text-[11px] text-zinc-400 ring-1 ring-zinc-200">
@@ -205,7 +208,8 @@ export function ShiftDayPage() {
                       caseRate={st === "outHos" ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS}
                     />
                   );
-                }))}
+                  })}
+                </section>)}
               </div>
 
               {/* Per-doctor totals */}
