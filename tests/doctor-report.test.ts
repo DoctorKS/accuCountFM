@@ -24,7 +24,7 @@ describe("per-doctor inHos report", () => {
     const office = { ...assignment, id: 2, slot: "0800-1600" as const };
     const rows = [assignment, office, { ...assignment, doctor_name: "กนก" as const }, { ...assignment, shift_type: "outHos" as const }, { ...assignment, date: "2026-09-30" }];
     expect(buildInHosDoctorReport("กวินท์", "2026-10", rows, [], [])).toHaveLength(1);
-    expect(buildInHosDoctorReport("กวินท์", "2026-10", rows, [], [1])).toHaveLength(2);
+    expect(buildInHosDoctorReport("กวินท์", "2026-10", rows, [], [1])[0].compensation).toBe(1560);
   });
   it("sorts by date and shift and preserves 24.00 as the last endpoint", () => {
     const late = { ...assignment, slot: "1600-2400" as const };
@@ -64,4 +64,15 @@ it("pays an independently selected surgeon once, even without a duty assignment"
   expect(buildCaseDoctorReport("อนิรุต", "2026-10", [assignment], [surgery])[0].compensation).toBe(4500);
   expect(buildCaseDoctorReport("กวินท์", "2026-10", [assignment], [surgery])).toEqual([]);
   expect(computeMonthByDoctor("inHos", [], [surgery], []).find(t => t.doctor === "อนิรุต")?.total).toBe(4500);
+});
+
+it("merges consecutive inHos duty slots and adds compensation with examination activity", () => {
+  const morning = { ...assignment, slot: "0800-1600" as const };
+  const late = { ...assignment, slot: "1600-2400" as const };
+  const rows = buildInHosDoctorReport("กวินท์", "2026-10", [late, morning], [{ ...examination, slot: late.slot }], [1]);
+  expect(rows).toEqual([{ date: assignment.date, start: "08.00 น.", end: "24.00 น.", activity: "ปฏิบัติงานชันสูตรนอกเวลา", compensation: 1511.25 }]);
+  expect(buildInHosDoctorReport("กวินท์", "2026-10", [assignment, morning, late], [], [1])).toEqual([
+    { date: assignment.date, start: "00.00 น.", end: "24.00 น.", activity: "เวรรับปรึกษานิติเวช", compensation: 2340 }
+  ]);
+  expect(buildInHosDoctorReport("กวินท์", "2026-10", [morning, { ...late, date: "2026-10-02" }], [], [1])).toHaveLength(2);
 });

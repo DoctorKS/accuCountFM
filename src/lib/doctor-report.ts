@@ -3,11 +3,11 @@ import type { Doctor } from "./doctors";
 import type { DoctorReportRow } from "./tauri";
 import { computeSlotPay, isOffHour } from "./calc";
 
-/** One row per assigned off-hour slot; surgery is not an examination. */
+/** Merge consecutive off-hour slots on the same date; surgery is not an examination. */
 export function buildInHosDoctorReport(
   doctor: Doctor, yearMonth: string, assignments: AssignmentRow[], cases: CaseRow[], holidays: number[],
 ): DoctorReportRow[] {
-  return assignments
+  const rows = assignments
     .filter(a => a.shift_type === "inHos" && a.doctor_name === doctor && a.date.slice(0, 7) === yearMonth && isOffHour(a.date, a.slot, holidays))
     .sort((a, b) => a.date.localeCompare(b.date) || a.slot.localeCompare(b.slot))
     .map(a => {
@@ -19,6 +19,16 @@ export function buildInHosDoctorReport(
         activity: examinations.length ? "ปฏิบัติงานชันสูตรนอกเวลา" : "เวรรับปรึกษานิติเวช",
         compensation: pay.base - pay.deduction };
     });
+  const merged: DoctorReportRow[] = [];
+  for (const row of rows) {
+    const previous = merged[merged.length - 1];
+    if (previous && previous.date === row.date && previous.end === row.start) {
+      previous.end = row.end;
+      previous.compensation += row.compensation;
+      if (row.activity === "ปฏิบัติงานชันสูตรนอกเวลา") previous.activity = row.activity;
+    } else { merged.push({ ...row }); }
+  }
+  return merged;
 }
 
 /** Case payments only; legacy monthly counts have no deceased names or times. */
