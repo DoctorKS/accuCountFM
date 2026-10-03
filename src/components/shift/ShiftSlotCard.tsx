@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import type { Slot, ShiftType } from "@/lib/constants";
 import { SLOT_LABEL } from "@/lib/constants";
-import { DOCTORS, type Doctor, isDoctor } from "@/lib/doctors";
+import { DOCTORS, DOCTOR_COLOR_HEX, type Doctor, isDoctor } from "@/lib/doctors";
 import { CaseRow } from "./CaseRow";
 import { isOffHour } from "@/lib/calc";
 import { useSetAssignment } from "@/hooks/useShift";
@@ -54,12 +54,15 @@ export function ShiftSlotCard({
             const other = type === "outHos" ? inDoctor : assignedDoctor;
             return <label key={type} className="flex items-center gap-2 text-sm">
               <span className="text-zinc-500">{type === "outHos" ? "แพทย์ชันสูตรนอก" : "แพทย์ชันสูตรใน"}</span>
+              <div className="relative">
+                {value && <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full" style={{ backgroundColor: DOCTOR_COLOR_HEX[value] }} />}
               <select value={value ?? ""} disabled={setAssign.isPending}
                 onChange={e => setAssign.mutate({ shiftType: type, date, slot, doctorName: isDoctor(e.target.value) ? e.target.value : null })}
-                className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm">
+                className={`rounded-lg border border-zinc-300 bg-white py-1.5 pr-3 text-sm ${value ? "pl-7" : "pl-3"}`}>
                 <option value="">—</option>
                 {DOCTORS.map(d => <option key={d} value={d} disabled={isOffHour(date, slot, holidays) && d === other}>{d}</option>)}
               </select>
+              </div>
             </label>;
           })}
         </div>
