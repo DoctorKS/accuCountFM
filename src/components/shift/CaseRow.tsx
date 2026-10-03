@@ -21,6 +21,18 @@ export function CaseRow({ row, autoFocus = false, onAddNext }: {
   const flush = () => {
     if (name.trim() !== row.case_name) upd.mutate({ id: row.id, patch: { case_name: name.trim() } });
   };
+  const timeFields = <>
+      <label className="flex items-center gap-1 text-xs text-zinc-500">
+        <span>{surgery ? "เริ่มผ่า" : "ออก"}</span>
+        <TimePicker24 value={row.leave_time} ariaLabel={surgery ? "เวลาเริ่มผ่า" : "เวลาออก"}
+          onChange={v => upd.mutate({ id: row.id, patch: { leave_time: v } })} />
+      </label>
+      <label className="flex items-center gap-1 text-xs text-zinc-500">
+        <span>{surgery ? "ผ่าเสร็จสิ้น" : "กลับ"}</span>
+        <TimePicker24 value={row.return_time} ariaLabel={surgery ? "เวลาผ่าเสร็จสิ้น" : "เวลากลับ"}
+          onChange={v => upd.mutate({ id: row.id, patch: { return_time: v } })} />
+      </label>
+  </>;
   return <div className="rounded-lg border border-zinc-200 bg-zinc-50/50 p-2">
     <div className="flex items-center gap-2 overflow-x-auto [&>label]:shrink-0 [&>select]:shrink-0 [&>button]:shrink-0">
     <input ref={input} aria-label="ชื่อ นามสกุล" placeholder="ชื่อ นามสกุล" value={name}
@@ -38,18 +50,7 @@ export function CaseRow({ row, autoFocus = false, onAddNext }: {
       <TimePicker24 value={row.examination_time ?? null} ariaLabel="เวลาชันสูตร"
         onChange={v => upd.mutate({ id: row.id, patch: { examination_time: v } })} />
     </label>}
-    {showTimes && <>
-      <label className="flex items-center gap-1 text-xs text-zinc-500">
-        <span>{surgery ? "เริ่มผ่า" : "ออก"}</span>
-        <TimePicker24 value={row.leave_time} ariaLabel={surgery ? "เวลาเริ่มผ่า" : "เวลาออก"}
-          onChange={v => upd.mutate({ id: row.id, patch: { leave_time: v } })} />
-      </label>
-      <label className="flex items-center gap-1 text-xs text-zinc-500">
-        <span>{surgery ? "ผ่าเสร็จสิ้น" : "กลับ"}</span>
-        <TimePicker24 value={row.return_time} ariaLabel={surgery ? "เวลาผ่าเสร็จสิ้น" : "เวลากลับ"}
-          onChange={v => upd.mutate({ id: row.id, patch: { return_time: v } })} />
-      </label>
-    </>}
+    {surgery && timeFields}
     {surgery ? <select aria-label="แพทย์ผู้ผ่า" value={row.surgeon_name ?? ""}
       onChange={e => upd.mutate({ id: row.id, patch: { surgeon_name: (e.target.value || null) as typeof row.surgeon_name } })}
       className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm">
@@ -67,6 +68,7 @@ export function CaseRow({ row, autoFocus = false, onAddNext }: {
 
     <button type="button" aria-label="ลบเคส" onClick={() => del.mutate(row.id)} className="rounded-md p-1.5 text-rose-500 hover:bg-rose-50"><Trash2 className="h-4 w-4" /></button>
     </div>
+    {!surgery && row.shift_type === "outHos" && <div className="mt-2 flex items-center gap-3 overflow-x-auto [&>label]:shrink-0">{timeFields}</div>}
     {upd.error && <p role="alert" className="w-full text-xs text-rose-600">บันทึกล้มเหลว: {String(upd.error)}</p>}
   </div>;
 }
