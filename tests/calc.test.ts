@@ -139,7 +139,7 @@ describe("computeSlotPay", () => {
     expect(p.total).toBeCloseTo(780 - DEDUCT_PER_HALF_HOUR + CASE_BONUS_OUT_HOS);
   });
 
-  it("inHos off-hour 3 cases × 10min virtual: 780 − 48.75 + 3600", () => {
+  it("inHos off-hour 3 cases: 780 − 3 × 48.75 + 3600", () => {
     const a = assign(SATURDAY, "0800-1600", "กนก", "inHos");
     const cases: ShiftCase[] = Array.from({ length: 3 }, () => ({
       shiftType: "inHos" as const,
@@ -149,9 +149,9 @@ describe("computeSlotPay", () => {
       returnTime: null,
     }));
     const p = computeSlotPay(a, cases, []);
-    expect(p.deduction).toBeCloseTo(DEDUCT_PER_HALF_HOUR);
+    expect(p.deduction).toBeCloseTo(3 * DEDUCT_PER_HALF_HOUR);
     expect(p.caseBonus).toBe(3 * CASE_BONUS_IN_HOS);
-    expect(p.total).toBeCloseTo(780 - DEDUCT_PER_HALF_HOUR + 3 * CASE_BONUS_IN_HOS);
+    expect(p.total).toBeCloseTo(780 - 3 * DEDUCT_PER_HALF_HOUR + 3 * CASE_BONUS_IN_HOS);
   });
 
   it("deduction capped at base; case bonus still paid", () => {

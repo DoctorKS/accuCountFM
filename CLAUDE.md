@@ -56,7 +56,7 @@ Native Windows app, ไม่มี auth, เก็บ local-first บนเค�
 | โบนัสต่อเคส (ชันสูตรนอก) | `CASE_BONUS_OUT_HOS = 1800` | "โบนัสเคสนอก" |
 | โบนัสต่อเคส (ชันสูตรใน) | `CASE_BONUS_IN_HOS = 1200` | "โบนัสเคสใน" |
 | หักครึ่ง ชม. ที่ออกจากเวร | `DEDUCT_PER_HALF_HOUR = 48.75` | |
-| Virtual time ต่อ 1 เคสใน (inHos) | `IN_HOS_MIN_PER_CASE = 10` | |
+| หักต่อ 1 เคสชันสูตรใน (inHos) นอกเวลา | `DEDUCT_PER_HALF_HOUR = 48.75` | "หักเคสละ 48.75 บาท" |
 | Grace period (ไม่หัก) | `GRACE_MIN = 4` | "1-4 นาทีแรกไม่หัก" |
 | **off-hour predicate** | `is_off_hour(date, slot, holidays)` | "นอกเวลา / ในเวลา" |
 | ค่าผ่าต่อเคส (เจาะตัดเนื้อ) | `AUTOPSY_CUT_RATE = 4500` | "ผ่า × 4,500" |
@@ -111,9 +111,9 @@ export type Doctor = typeof DOCTORS[number];
    - outHos: minutes_out = Σ (return_time − leave_time) ทุก case ใน slot
               cross-midnight (return < leave) → +24h
               malformed time → 0
-   - inHos:  minutes_out = case_count × IN_HOS_MIN_PER_CASE (= 10)
-   - units = if minutes_out ≤ GRACE_MIN then 0 else ceil((minutes_out − 4) / 30)
-   - deduction = units × DEDUCT_PER_HALF_HOUR (= 48.75)
+   - inHos:  deduction = examination_case_count × 48.75 (ไม่นับเคสผ่า; cap ≤ base)
+   - outHos units = if minutes_out ≤ GRACE_MIN then 0 else ceil((minutes_out − 4) / 30)
+   - outHos deduction = units × DEDUCT_PER_HALF_HOUR (= 48.75)
    - cap: deduction ≤ base (base goes to 0, doesn't go negative)
 
 3. case_bonus — จ่ายทุก case ไม่ว่าเวลาไหน (in-hour ก็ได้):
@@ -444,3 +444,15 @@ Sign-related files (per SIGN.md):
 - Legacy monthly autopsy counts remain separate adjustments; daily surgery rows
   are counted automatically, never copied into the manually entered counts.
 - Summary and Excel show surgery pay separately from examination type totals.
+
+## Per-doctor inHos report (approved October 2026)
+
+- InHos off-hour base deduction is examination count × 48.75 (capped at base).
+  Replace the prior virtual-ten-minute aggregation in both TS and Rust.
+- Office-hour base remains zero; surgery is excluded from this deduction.
+- Per-doctor report exports off-hour inHos assignments for the selected month.
+  Compensation is base minus deduction only, excluding case and surgery bonuses.
+- Use TH Sarabun New 16, one printable worksheet, dynamic physician/month,
+  fixed department head นายแพทย์กนก  วัยธรรม, and the requested rounding note.
+- Run in development mode after changes. Build release EXE/installers only
+  when explicitly requested; commit/push is not release-build authorization.

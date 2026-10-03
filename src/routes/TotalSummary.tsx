@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ChevronRight, Download, Loader2 } from "lucide-react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
-import { DOCTORS, DOCTOR_COLOR_HEX, isDoctor, type Doctor } from "@/lib/doctors";
+import { DOCTORS, DOCTOR_COLOR_HEX, DOCTOR_FULL_NAME, isDoctor, type Doctor } from "@/lib/doctors";
 import {
   AUTOPSY_CUT_RATE, AUTOPSY_NON_CUT_RATE,
   type ShiftType,
@@ -12,7 +12,8 @@ import { currentYearMonth, formatBEMonth } from "@/lib/buddhist";
 import { fmtBaht } from "@/lib/utils";
 import { useMonth, useAutopsyCounts, useUpsertAutopsyCount } from "@/hooks/useShift";
 import { computeMonthByDoctor, type DoctorMonthSummary } from "@/lib/calc-month";
-import { exportMonthXlsx, type ShiftBundle } from "@/lib/tauri";
+import { exportMonthXlsx, exportInHosDoctorXlsx, type ShiftBundle } from "@/lib/tauri";
+import { buildInHosDoctorReport } from "@/lib/doctor-report";
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker";
 import { CasesDialog } from "@/components/cases/CasesDialog";
 import type { AssignmentRow, CaseRow } from "@/lib/db";
@@ -48,6 +49,7 @@ function toBundle(shiftType: ShiftType, assignments: AssignmentRow[], cases: Cas
 export function TotalSummary({ mode }: { mode: Mode }) {
   const [ym, setYm] = useState(currentYearMonth());
   const [exporting, setExporting] = useState(false);
+  const [exportingDoctor, setExportingDoctor] = useState<Doctor | null>(null);
 
   const outMonth = useMonth("outHos", ym);
   const inMonth = useMonth("inHos", ym);
@@ -132,6 +134,27 @@ export function TotalSummary({ mode }: { mode: Mode }) {
     setExporting(false);
   }
 
+  async function doExportDoctor(doctor: Doctor) {
+    if (!inMonth.data || exportingDoctor) return;
+    setExportingDoctor(doctor);
+    try {
+      const savePath = await saveDialog({
+        defaultPath: `รายงานเวรชันสูตรใน_${doctor}_${ym}.xlsx`,
+        filters: [{ name: "Excel", extensions: ["xlsx"] }],
+      });
+      if (!savePath) return;
+      const path = await exportInHosDoctorXlsx({
+        yearMonth: ym, doctorFullName: DOCTOR_FULL_NAME[doctor], savePath,
+        rows: buildInHosDoctorReport(doctor, ym, inMonth.data.assignments, inMonth.data.cases, inMonth.data.holidays),
+      });
+      toast.success(`บันทึก ${path}`);
+    } catch (error) {
+      toast.error("Export ล้มเหลว: " + String(error));
+    } finally {
+      setExportingDoctor(null);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <header className="flex items-end justify-between">
@@ -141,14 +164,14 @@ export function TotalSummary({ mode }: { mode: Mode }) {
         </div>
         <div className="flex items-end gap-3">
           <MonthYearPicker value={ym} onChange={setYm} />
-          <button
+          {mode !== "inHos" && <button
             onClick={doExport}
             disabled={exporting || outMonth.isLoading || inMonth.isLoading || autopsy.isLoading || !outMonth.data || !inMonth.data || !!autopsy.error}
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
           >
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             Export Excel
-          </button>
+          </button>}
         </div>
       </header>
 
@@ -160,6 +183,8 @@ export function TotalSummary({ mode }: { mode: Mode }) {
             rows={rows}
             mode={mode}
             yearMonth={ym}
+            onExportDoctor={mode === "inHos" && inMonth.data ? doExportDoctor : undefined}
+            exportingDoctor={exportingDoctor}
             assignments={(mode === "outHos" ? outMonth.data?.assignments : inMonth.data?.assignments) ?? []}
             cases={(mode === "outHos" ? outMonth.data?.cases : inMonth.data?.cases) ?? []}
           />}
@@ -284,12 +309,14 @@ function AutopsyInput({
 
 /* ───── Simpler table for /summary/out and /summary/in ─────────────────── */
 
-function SimpleTable({ rows, mode, yearMonth, assignments, cases }: {
+function SimpleTable({ rows, mode, yearMonth, assignments, cases, onExportDoctor, exportingDoctor }: {
   rows: Array<{ doctor: Doctor; outTotal: number; inTotal: number }>;
   mode: "outHos" | "inHos";
   yearMonth: string;
   assignments: AssignmentRow[];
   cases: CaseRow[];
+  onExportDoctor?: (doctor: Doctor) => void;
+  exportingDoctor?: Doctor | null;
 }) {
   const isOut = mode === "outHos";
   const shiftType: ShiftType = isOut ? "outHos" : "inHos";
@@ -341,6 +368,13 @@ function SimpleTable({ rows, mode, yearMonth, assignments, cases }: {
                       <span className="h-2 w-2 rounded-full" style={{ background: DOCTOR_COLOR_HEX[r.doctor] }} />
                       {r.doctor}
                     </span>
+                    {!isOut && <button type="button" onClick={() => onExportDoctor?.(r.doctor)}
+                      disabled={!onExportDoctor || !!exportingDoctor}
+                      className="ml-3 inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 disabled:opacity-50"
+                      aria-label={`Export เวรชันสูตรในของ ${r.doctor}`}>
+                      {exportingDoctor === r.doctor ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                      Export
+                    </button>}
                   </td>
                   <td className="px-4 py-3 text-center">
                     {csCount > 0 ? (

@@ -74,3 +74,21 @@ export interface ExportResult { path: string; doctorTotals: Record<string, Docto
 
 export const exportMonthXlsx = (payload: ExportPayload) =>
   invoke<ExportResult>("export_month_xlsx", { payload });
+
+export interface DoctorReportRow {
+  date: string;
+  start: string;
+  end: string;
+  activity: string;
+  compensation: number;
+}
+
+export interface DoctorReportPayload {
+  yearMonth: string;
+  doctorFullName: string;
+  savePath: string;
+  rows: DoctorReportRow[];
+}
+
+export const exportInHosDoctorXlsx = (payload: DoctorReportPayload) =>
+  invoke<string>("export_in_hos_doctor_xlsx", { payload });

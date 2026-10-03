@@ -10,6 +10,7 @@
 // it in TS for live preview, but persisted totals must come from here.
 
 pub mod calc;
+pub mod doctor_report;
 pub mod excel;
 pub mod keys;
 pub mod ocr;
@@ -70,6 +71,7 @@ pub fn run() {
             commands::has_api_key,
             commands::ocr_run,
             commands::export_month_xlsx,
+            commands::export_in_hos_doctor_xlsx,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -142,5 +144,12 @@ mod commands {
     #[tauri::command]
     pub fn export_month_xlsx(payload: excel::ExportPayload) -> Result<excel::ExportResult, String> {
         excel::write_workbook(&payload)
+    }
+
+    #[tauri::command]
+    pub fn export_in_hos_doctor_xlsx(
+        payload: crate::doctor_report::DoctorReportPayload,
+    ) -> Result<String, String> {
+        crate::doctor_report::write_doctor_report(&payload)
     }
 }

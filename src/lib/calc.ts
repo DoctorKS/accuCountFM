@@ -17,7 +17,6 @@ import {
   CASE_BONUS_OUT_HOS,
   CASE_BONUS_IN_HOS,
   DEDUCT_PER_HALF_HOUR,
-  IN_HOS_MIN_PER_CASE,
   GRACE_MIN,
 } from "./constants";
 
@@ -60,7 +59,7 @@ export function isOffHour(date: string, slot: Slot, holidays: number[]): boolean
   const isHoliday = holidays.includes(day);
   const isNightSlot = slot === "0000-0800" || slot === "1600-2400";
 
-  return (isNightSlot && !isWeekend && !isHoliday) || isWeekend || isHoliday;
+  return isNightSlot || isWeekend || isHoliday;
 }
 
 /** Returns half-hour deduction units; 0 if minutes_out ≤ GRACE_MIN. */
@@ -118,12 +117,11 @@ export function computeSlotPay(
       minutesOut = examinations.reduce((sum, c) => sum + caseMinutes(c.leaveTime, c.returnTime), 0);
       minutesLabel = `ออกรวม ${minutesOut} นาที`;
     } else {
-      minutesOut = caseCount * IN_HOS_MIN_PER_CASE;
-      minutesLabel = `${caseCount}×${IN_HOS_MIN_PER_CASE}=${minutesOut} นาที`;
+      minutesLabel = `${caseCount} เคส × ${DEDUCT_PER_HALF_HOUR} บาท`;
     }
   }
 
-  const units = deductionUnits(minutesOut);
+  const units = offHour ? (isOut ? deductionUnits(minutesOut) : caseCount) : 0;
   const deduction = units * DEDUCT_PER_HALF_HOUR;
   const cappedDeduct = Math.min(deduction, base);
   const caseBonus = caseCount * (isOut ? CASE_BONUS_OUT_HOS : CASE_BONUS_IN_HOS) + surgeryCount * 4500;

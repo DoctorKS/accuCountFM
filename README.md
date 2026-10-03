@@ -24,7 +24,7 @@ A native Windows desktop app for computing on-call shift pay for 4 forensic doct
 - แต่ละ shift มี doctor dropdown (อนิรุต / พฤพงศ์ / กนก / กวินท์)
 - **"+ เพิ่มเคสชันสูตร"** — กรอกเคสในเวรนั้น ๆ
   - **outHos:** ชื่อ นามสกุล + เวลาออก + เวลากลับ (drop-down ชม. + นาที)
-  - **inHos:** ชื่อเคสอย่างเดียว (1 เคส = virtual 10 นาที)
+  - **inHos:** ชื่อเคสอย่างเดียว (หักค่าเวรนอกเวลาเคสละ 48.75 บาท)
 - ใต้สุด: **"สรุปเงินเวร"** ต่อวัน + แจกแจงที่มา
 
 ### 💰 สรุปเงินเวร
@@ -38,6 +38,12 @@ A native Windows desktop app for computing on-call shift pay for 4 forensic doct
   2. `cases` — รายละเอียดเคสทุกเคส
   3. `doctor_breakdown` — แจกแจงต่อหมอ
   4. `totals` — สรุปรวม
+- หน้า **สรุปเงินเวรชันสูตรใน** มีปุ่ม **Export** หลังชื่อแพทย์แต่ละคน
+  ส่งออก `.xlsx` ตารางรายงานนอกเวลาราชการเฉพาะแพทย์และเดือนที่เลือก
+  ใช้ TH Sarabun New 16 พร้อมหัวเอกสาร ลงนาม และหมายเหตุ
+  ค่าตอบแทน = `max(0, 780 - จำนวนเคสชันสูตรใน × 48.75)` ต่อช่วง
+  ไม่รวมค่าเคสและค่าผ่า; เวรไม่มีเคสแสดง "เวรรับปรึกษานิติเวช"
+  เมื่อมีเคสแสดง "ปฏิบัติงานชันสูตรนอกเวลา"
 - ใช้ `rust_xlsxwriter` → UTF-8 ภาษาไทยตรงเป๊ะ, ไม่ต้อง BOM hack
 
 ---
@@ -67,7 +73,7 @@ A native Windows desktop app for computing on-call shift pay for 4 forensic doct
 สูตร: `if minOut ≤ 4 → 0; else units = ⌈(minOut − 4) / 30⌉; deduction = units × 48.75`
 
 - **outHos:** `minOut` = Σ (เวลากลับ − เวลาออก) ทุกเคสใน slot นั้น
-- **inHos:** `minOut` = จำนวนเคส × 10 นาที (virtual)
+- **inHos:** หักค่าเวรนอกเวลา **จำนวนเคสชันสูตรใน × 48.75 บาท** (ไม่นับเคสผ่า) โดยค่าเวรสุทธิไม่ต่ำกว่า 0 บาท
 
 ### โบนัสต่อเคส
 
@@ -82,7 +88,7 @@ A native Windows desktop app for computing on-call shift pay for 4 forensic doct
 slot_total = max(0, base_pay − deduction) + case_count × case_bonus
 ```
 
-(`base_pay` คือ 780 หรือ 760 ตาม chain; `case_bonus` คือ 1,800 หรือ 1,200 ตาม shift type)
+(`base_pay` คือ 780 นอกเวลา หรือ 0 ในเวลาราชการ; `case_bonus` คือ 1,800 หรือ 1,200 ตาม shift type)
 
 ---
 
@@ -154,6 +160,10 @@ npm run tauri:dev       # hot-reload dev mode
 ```
 
 ### Production installer
+
+**แนวทางการทำงาน:** หลังแก้ไขให้ตรวจสอบและรันแอปด้วย `npm run tauri:dev`
+เพื่อให้ทดลองใช้งานก่อน สร้างไฟล์ EXE สำหรับแจกจ่ายและ installer เฉพาะเมื่อผู้ใช้
+สั่งให้สร้างอย่างชัดเจนเท่านั้น การสั่ง commit/push ไม่ถือเป็นคำสั่งสร้าง EXE หรือ installer
 
 ```powershell
 npm run tauri:build

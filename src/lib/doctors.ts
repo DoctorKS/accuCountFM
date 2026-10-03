@@ -6,6 +6,14 @@
 export const DOCTORS = ["อนิรุต", "พฤพงศ์", "กนก", "กวินท์"] as const;
 export type Doctor = (typeof DOCTORS)[number];
 
+/** Full names used in monthly reports and signature blocks. */
+export const DOCTOR_FULL_NAME: Record<Doctor, string> = {
+  อนิรุต: "นายแพทย์อนิรุต  วรวาท",
+  พฤพงศ์: "นายแพทย์พฤพงศ์  มกรเสน",
+  กนก: "นายแพทย์กนก  วัยธรรม",
+  กวินท์: "นายแพทย์กวินท์  ศัลย์วิเศษ",
+};
+
 /** Tailwind class tokens — matches color hint used by Claude OCR system prompt. */
 export const DOCTOR_COLOR_HEX: Record<Doctor, string> = {
   อนิรุต: "#7c3aed", // violet
