@@ -58,7 +58,7 @@ export function buildCaseDoctorReport(
         ? `${String(Math.floor(minutes / 60) % 24).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`
         : time(c.return_time, c.case_name);
       return { date: c.date, start: start.replace(":", ".") + " น.", end: end.replace(":", ".") + " น.",
-        activity: surgery ? "ผ่าตรวจภายในและตรวจชิ้นเนื้อศพ" : inside
+        activity: surgery ? "ผ่าตรวจภายในและตัดชิ้นเนื้อศพ" : inside
           ? "ชันสูตรพลิกศพในโรงพยาบาลพระปกเกล้า" : "ชันสูตรพลิกศพนอกโรงพยาบาลพระปกเกล้า",
         deceasedName: c.case_name, compensation: surgery ? 4500 : inside ? 1200 : 1800 };
     }).sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start));

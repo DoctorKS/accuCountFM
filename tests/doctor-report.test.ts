@@ -46,7 +46,8 @@ describe("case report", () => {
     const rows = buildCaseDoctorReport("กวินท์", "2026-10", [assignment, outside], cases);
     expect(rows.map(r => r.compensation)).toEqual([1800, 4500, 1200]);
     expect(rows[2].end).toBe("00.05 น.");
-    expect(rows[1].activity).toBe("ผ่าตรวจภายในและตรวจชิ้นเนื้อศพ");
+    expect(rows[0].activity).toBe("ชันสูตรพลิกศพนอกโรงพยาบาลพระปกเกล้า");
+    expect(rows[1].activity).toBe("ผ่าตรวจภายในและตัดชิ้นเนื้อศพ");
     expect(rows.reduce((s,r) => s+r.compensation,0)).toBe(7500);
     expect(buildCaseDoctorReport("อนิรุต", "2026-10", [assignment, outside], cases)).toEqual([]);
     expect(buildCaseDoctorReport("กวินท์", "2026-09", [assignment, outside], cases)).toEqual([]);
